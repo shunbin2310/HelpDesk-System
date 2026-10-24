@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HelpDesk.Api/HelpDesk.Api.csproj" />
+    <Project Path="src/HelpDesk.Application/HelpDesk.Application.csproj" />
+    <Project Path="src/HelpDesk.Domain/HelpDesk.Domain.csproj" />
+    <Project Path="src/HelpDesk.Infrastructure/HelpDesk.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/HelpDesk.Web/">
+    <File Path="src/HelpDesk.Web/index.html" />
+    <File Path="src/HelpDesk.Web/package.json" />
+    <File Path="src/HelpDesk.Web/package-lock.json" />
+    <File Path="src/HelpDesk.Web/tsconfig.json" />
+    <File Path="src/HelpDesk.Web/vite.config.ts" />
+  </Folder>
+  <Folder Name="/src/HelpDesk.Web/src/">
+    <File Path="src/HelpDesk.Web/src/App.vue" />
+    <File Path="src/HelpDesk.Web/src/main.ts" />
+    <File Path="src/HelpDesk.Web/src/style.css" />
+    <File Path="src/HelpDesk.Web/src/vite-env.d.ts" />
+    <File Path="src/HelpDesk.Web/src/services/health.ts" />
+  </Folder>
+  <Folder Name="/docs/">
+    <File Path="docs/implementation-plan.md" />
+    <File Path="docs/requirements.md" />
+    <File Path="docs/database-design.md" />
+  </Folder>
+</Solution>

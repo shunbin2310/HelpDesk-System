@@ -1,0 +1,15 @@
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+*.user
+*.suo
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+!.env.*.example
+
