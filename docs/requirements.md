@@ -46,15 +46,15 @@ HelpDesk-System/
 
 Api 引用 Application 和 Infrastructure；Application 引用 Domain；Infrastructure 引用 Application；Domain 不引用其他业务项目。Application 按 Auth、Users、Tickets、Delegations、Workflows 等模块组织 Dto、Interfaces、Mappings、Services。Web 为 Vue 项目，通过 HTTP 访问 Api。EF Core Migrations 放在 Infrastructure，第一版无需独立旧数据迁移项目。
 
-以上是参考公司项目后的组织方式。当前已建立四个 .NET 项目及 Vue Web 骨架；tests 中的项目仍是后续业务测试规划，尚未建立。启动方式见 [README](../README.md)。
+以上是参考公司项目后的组织方式。当前已建立四个 .NET 项目、Vue Web、UnitTests 和 IntegrationTests，并完成阶段 1 数据基础。启动和测试方式见 [README](../README.md)。
 
-Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的开关、目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；开启启动迁移后，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 默认关闭、部署显式开启；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。当前骨架尚未接入这些行为。
+Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的开关、目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；开启启动迁移后，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 默认关闭、部署显式开启；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。阶段 1 已实现并验证启动迁移；GitHub Actions 的 CI 配置仍留在部署阶段。
 
 ## 2. 用户与角色
 
 每个用户账号只分配一个角色，采用 Email + Password 登录。Email 唯一，姓名用于显示。账号由 System Admin 创建、分配角色及停用，不开放自行注册；密码以 Hash 保存。
 
-认证以 Project1 的 JWT Bearer 实现为参考方向，具体适配见[实施计划](implementation-plan.md)。当前尚未接入认证；令牌存储、有效期、退出和会话失效策略需在认证阶段确定。是否采用完整 ASP.NET Core Identity，需要在首次 Migration 前确定，且仍须满足单角色规则。
+已确认采用 ASP.NET Core Identity 管理账号，并参考 Project1 使用 JWT Bearer 提供 API 身份凭证，具体适配见[实施计划](implementation-plan.md)。每个账号只能关联一个角色；Identity 的标准角色关联结构需要加上单角色约束。阶段 1 已实现 Identity 模型及内部账号存储，尚未接入登录和 JWT API；令牌存储、有效期、退出和会话失效策略仍需在认证阶段确定。
 
 | 能力 | Employee | Support IT Staff | Support Admin | System Admin |
 | --- | --- | --- | --- | --- |
@@ -224,11 +224,11 @@ Actioner 至少需表达：
 10. 发布新模板版本后，已有 Ticket 的流程副本保持不变；非法动作被后端拒绝。
 11. 每个账号只有一个角色，普通用户不能管理模板或创建其他账号。
 
-以上是后续业务实现的验收目标。当前只建立基础骨架，尚未实现或运行这些业务场景。
+以上是后续业务实现的验收目标。阶段 1 已通过数据库约束、账号存储和启动迁移测试，但这些完整业务场景仍待后续 API 及页面实现后验收。
 
 ## 10. 实现前仍需决定的事项
 
-- 账号存储是否采用完整 Identity、账号初始化、初始密码交付、修改和重置密码；JWT 的令牌存储、有效期、刷新、退出及停用后的会话处理。
+- Identity 账号初始化、初始密码交付、修改和重置密码；JWT 的令牌存储、有效期、刷新、退出及停用后的会话处理。
 - 附件限制、存储方式和消息修改策略。
 - 代理边界与调度方式，尤其是人员停用和重叠安排。
 - 工作流配置页的可编辑范围，以及哪些动作必须填写说明。

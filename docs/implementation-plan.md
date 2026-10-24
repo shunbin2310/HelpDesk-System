@@ -11,12 +11,14 @@
 | 项目 | 状态 |
 | --- | --- |
 | 核心角色、Ticket 流程、Assignment、Delegation 规则 | 已讨论并记录；边界事项单独列为待确认 |
-| SQL Server 数据库设计 | 已有草案，尚未生成数据库 |
+| SQL Server 数据库基础 | 已建立 BIN / HelpDeskDb，22 张应用表及 Migration 历史；阶段 1 已验证 |
+| 本地开发连接 | BIN / HelpDeskDb / Windows Authentication；数据库已创建并应用全部 Migration |
+| 账号基础 | 已实现 Identity 模型、内部账号存储及单角色约束；JWT 和登录 API 待阶段 2 实现 |
 | Api / Application / Domain / Infrastructure | 已建立 .NET 10 项目及引用 |
 | Web | 已建立 Vue 3 + TypeScript + Vite 骨架 |
 | API Health 与开发代理 | 已实现 `/health` 及前端 `/api/health` 代理 |
 | 前后端构建与基础连通 | 2026-10-23 已验证；本次编写计划未重新运行服务 |
-| EF Core、登录、业务功能及业务测试 | 尚未实现 |
+| 阶段 1 测试 | 11 项单元测试、5 项 SQL Server 集成测试通过；登录和 Ticket 等业务功能仍待后续阶段 |
 
 开发遵循 Api → Application + Infrastructure、Application → Domain、Infrastructure → Application 的引用方向。Frontend 位于 `src/HelpDesk.Web`，通过 HTTP 调用 Api。
 
@@ -27,7 +29,7 @@
 ```text
 0. 项目骨架（已完成）
        ↓
-1. Domain + EF Core + SQL Server
+1. Domain + EF Core + SQL Server（已完成）
        ↓
 2. 登录、权限及用户管理
        ↓
@@ -64,31 +66,42 @@
 
 ## 4. 阶段 1：Domain、EF Core 与 SQL Server
 
-目标：把经过审核的数据库草案转为可维护的数据模型和 Migration。
+状态：2026-10-24 已完成数据基础及本阶段验收。
 
-工作内容：
+- [x] 确认 BIN / HelpDeskDb / Windows Authentication，创建独立开发数据库。
+- [x] 审核本阶段字段长度、外键、唯一性、并发及删除限制；工单编号具体格式、附件和代理政策保留到对应业务阶段确认。
+- [x] 使用 ASP.NET Core Identity；角色关联表对 UserId 建唯一索引，内部账号创建和角色调整服务使用事务保证恰好一个角色。
+- [x] 建立 Domain 的 Entities、Enums、角色和流程常量，不引用 EF Core 或 Identity。
+- [x] 配置六类工单和代理业务表、七张 Identity 表，以及九张工作流定义、实例和历史表。
+- [x] 添加 SQL Server Provider、HelpDeskDbContext、配置映射和依赖注入。
+- [x] 落实唯一 Email、单工单单流程实例、UTC、rowversion 和同流程复合外键。
+- [x] 生成并审核完整 Migration、Designer、Snapshot 文件，应用到本机开发库；文件保留供后续 Git 提交，未代替用户执行 Commit。
+- [x] 添加默认关闭、显式开启的启动迁移服务；检查目标数据库，失败阻止启动，无待执行项时跳过。
+- [x] 添加仓库级 dotnet-ef 工具清单及设计时 Factory，模型一致性检查通过。
+- [x] 更新 README 的连接、启动迁移、生成 Migration 和测试步骤。
 
-- [ ] 确认本地 SQL Server 实例、开发数据库名称及连接方式。
-- [ ] 审核字段、外键、索引、编号格式和删除策略；为未决定的策略保留清晰边界。
-- [ ] 参考 Project1 的认证实现，在生成 Migration 前确定账号存储：是否采用完整 ASP.NET Core Identity，或保留当前单角色 Users 设计并使用所需认证组件。若选 Identity，应先修订表结构及表数量，保证每个账号只有一个角色。
-- [ ] 在 Domain 建立角色、分类、优先级、消息类型和业务实体。
-- [ ] 建立七类业务表对应模型，以及四类 Template、四类 Instance 和 WorkflowHistory 模型。
-- [ ] 在 Infrastructure 添加 EF Core SQL Server Provider、DbContext、实体映射及依赖注入。
-- [ ] 配置单角色、规范化 Email 唯一、单 Ticket 单流程实例、UTC 时间和并发控制。
-- [ ] 生成、审核并提交 Migration 文件；在专用开发数据库验证应用方式。
-- [ ] 参考公司项目的启动迁移流程，并结合 Project1 的控制方式添加显式开启的迁移服务：检查目标数据库、查询待执行 Migration、有待执行项才应用，成功后才启动 API；Program.cs 负责调用，数据库实现放在 Infrastructure。
-- [ ] 添加本地 EF CLI 工具配置和模型检查步骤，区分“模型缺少 Migration 文件”和“数据库有尚未应用的 Migration”。生成和检查 Migration 时关闭启动迁移。
-- [ ] 在 README 中记录连接配置和 Migration 命令；凭据通过本地配置或环境变量管理。
+本轮新增代码位于 Domain、Application/Users、Infrastructure、Api 的启动配置及两个测试项目。JWT 签发、登录及用户管理 API、Workflow Engine、Ticket 页面和 Delegation 后台任务尚未实现。
 
-涉及位置：`HelpDesk.Domain`、`HelpDesk.Infrastructure`，以及 Api 的启动注册与配置。
+验证结果：
 
-完成标准：从空的开发数据库可以建立所需结构；EF 模型与 Migration 一致；数据库关系满足设计。SQL Server 配置、外键和 rowversion 应在实际 SQL Server 环境验证。
+| 检查 | 结果 |
+| --- | --- |
+| Release 构建 | 通过，0 警告、0 错误 |
+| 启动迁移单元测试 | 11 / 11 通过 |
+| 实际 SQL Server 集成测试 | 5 / 5 通过，无跳过 |
+| 模型与 Snapshot | has-pending-model-changes 通过 |
+| 数据库 | 22 张应用表 + __EFMigrationsHistory |
+| Migration | InitialCreate、AddWorkflowInstanceSequence、FixCurrentStepOwnership 均已应用 |
+| 预置数据 | 4 个固定角色；无默认用户、工单或流程实例 |
+| 重启与 Health | 无待执行项时跳过，/health 返回 healthy |
+
+真实数据库测试发现并修正了当前步骤可空复合外键与流程主键的相互影响：流程 Id 改用 sequence / HiLo；当前步骤使用独立所属列、CHECK 和复合外键。已应用 Migration 保留，通过追加 Migration 修正；集成测试同时验证合法实例创建与跨工单步骤拒绝。
 
 ## 5. 阶段 2：登录、权限与用户管理
 
 目标：让四个角色使用真实账号进入系统，后端能够识别当前用户并限制操作。
 
-认证以 Project1 的 JWT Bearer 实现为参考方向。实现前确认：令牌存储位置、有效期、是否需要 Refresh Token、退出是否要求服务端立即失效、首个 System Admin 的初始化、初始密码交付与重置，以及账号停用和角色变更后的会话处理。账号存储方案须在阶段 1 生成 Migration 前确定。
+已确认 ASP.NET Core Identity + JWT，并限制每个账号一个角色。实现前仍需确认：令牌存储位置、有效期、是否需要 Refresh Token、退出是否要求服务端立即失效、首个 System Admin 的初始化、初始密码交付与重置，以及账号停用和角色变更后的会话处理。Identity 表结构及单角色约束在阶段 1 生成 Migration 前落实。
 
 工作内容：
 
@@ -251,11 +264,11 @@ Employee Close → Closed
 4. 用中文交付：修改文件、关键变化、可测试步骤、验证结果和剩余限制。
 5. 完成验收后更新本计划的状态及相关文档，不提前勾选未完成项目。
 
-下一步建议从阶段 1 开始：先确认 SQL Server 的开发连接和账号存储方案，再审核并实现 Domain 与 EF Core 数据模型。编写本计划不会连接数据库或执行 Migration。
+下一步为阶段 2：确认凭据和首个管理员初始化细节，再实现登录、JWT、CurrentUserContext 及用户管理 API / 页面。阶段 1 数据基础已经完成。
 
 ## 14. Project1 功能参考清单
 
-参考来源：本机 `C:\Users\shun bin\source\repos\Project1`。2026-10-24 已查看下列实现；这是后续适配清单，Helpdesk 尚未接入 JWT 或 Identity。
+参考来源：本机 `C:\Users\shun bin\source\repos\Project1`。2026-10-24 已查看下列实现；Identity 数据基础及启动迁移已经适配，JWT 和其他业务部分仍按对应阶段实施。
 
 | 功能 | Project1 参考位置 | Helpdesk 适配重点 |
 | --- | --- | --- |
@@ -275,14 +288,14 @@ Employee Close → Closed
 适配约束：
 
 - 不直接引用 Project1 的程序集，不复制数据库连接、SigningKey、默认账号或环境配置。
-- Project1 使用 ASP.NET Core Identity 及角色关联表；当前 Helpdesk 数据库草案采用单个 Role 列。JWT 不要求必须沿用完整 Identity 表结构，需先确定方案再生成 Migration。
+- Helpdesk 已确认使用 ASP.NET Core Identity 及角色关联表，取代早期单个 Role 列的草案；角色关联表对 UserId 增加唯一约束，服务层保证每个账号恰好一个角色。Project1 的多角色业务不能直接照搬。
 - Project1 的前端会话使用 sessionStorage，退出为清除本地会话；在已检查的认证链路中未发现 Refresh Token 或服务端 logout 接口。这些是参考项目现状，不自动成为 Helpdesk 的已确认策略。
 - 参考项目的 Token 验证会查询 IsActive / SecurityStamp，用户管理会更新 SecurityStamp。Helpdesk 如采用相同方式，需要先在账号模型及持久化设计中表达相关字段和更新规则。
 - 项目间可以参考通用技术做法，业务权限始终采用 Helpdesk 已确认的四个角色、单团队和当前负责人规则。
 
 ## 15. EF Core Migration 与启动更新
 
-用户补充的参考方向：参考公司项目 API 启动时查询并应用 Migration 的方式，结合 Project1 的开关、目标数据库校验和 CI 模型检查。当前已核对两边代码；Helpdesk 尚未接入 DbContext 或启动迁移服务。
+用户补充的参考方向：参考公司项目 API 启动时查询并应用 Migration 的方式，结合 Project1 的开关、目标数据库校验和 CI 模型检查。当前已核对两边代码；Helpdesk 已接入 DbContext 和启动迁移服务并完成阶段 1 验证。
 
 公司项目在 `src/AHAM.CCIF.Api/Program.cs` 的 Build 之后直接调用 GetPendingMigrationsAsync，有待执行项才调用 MigrateAsync，失败阻止后续启动。Project1 把这部分抽成独立服务，并提供显式开关。Helpdesk 采用便于分层和测试的服务形式，保留默认关闭、部署显式开启的计划；不会因为参考公司实现而自动改为每次启动都迁移。
 

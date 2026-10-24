@@ -2,9 +2,11 @@
 
 日期：2026-10-23
 
+更新：2026-10-24，已确认采用 ASP.NET Core Identity + JWT，并维持单角色规则。
+
 数据库：Microsoft SQL Server；通过 SSMS 管理，应用通过 EF Core 访问。
 
-状态：实现前草案。字段类型、长度、索引和技术约束属于设计建议；业务规则以[需求说明](requirements.md)为准。本次不生成 SQL、Entity 或 Migration。
+状态：阶段 1 数据基础已实现并在本机验证。本文同时保留后续业务约束和待确认政策；实际字段及索引以 DbContext、配置和 Migration 为准。业务规则以[需求说明](requirements.md)为准。
 
 ## 1. 设计原则
 
@@ -14,19 +16,20 @@
 - 分配和代理改变负责人，不改变流程步骤。
 - 操作身份来自后端认证上下文。业务变更和对应历史在同一个数据库事务中提交。
 - 时间统一使用 UTC 的 datetimeoffset(7)，页面按用户时区显示。本次用户时区为 Asia/Kuala_Lumpur。
-- 主键建议使用 SQL Server IDENTITY：Users 使用 int，其余表使用 bigint；所有外键类型与目标一致。
+- Identity 的用户和角色标识建议使用 int，关联表采用 Identity 的标准单列或复合键；其余业务和工作流表使用 bigint 主键；流程实例使用 sequence / HiLo，其余采用 IDENTITY。所有外键类型与目标一致。
 - 需要并发修改的业务记录使用 rowversion；它是并发标记，不是日期。
 
 ## 2. 表与关系概览
 
-共规划 16 张核心表：7 张业务表、4 张 Template 表、4 张 Instance 表、1 张 WorkflowHistory。
+账号存储已从早期独立 Users 表调整为 ASP.NET Core Identity。按 Project1 当前已核对的七张基础 Identity 表规划，共 22 张表：7 张 Identity 表、6 张工单和代理业务表、4 张 Template 表、4 张 Instance 表、1 张 WorkflowHistory。最终物理结构以选定 Identity 配置和实际生成的 Migration 为准。
 
 ```text
-Users ──< Tickets（提交人 / 当前负责人）
+AspNetRoles ──< AspNetUserRoles >── AspNetUsers
+AspNetUsers ──< Tickets（提交人 / 当前负责人）
             ├──< TicketMessages ──< Attachments
             ├──< Attachments（直接附在 Ticket 的文件）
             ├──< TicketHistories
-            ├──< DelegationTickets >── Delegations >── Users（A / B）
+            ├──< DelegationTickets >── Delegations >── AspNetUsers（A / B）
             └── WorkflowProcessInstance
                     ├──< WorkflowStepInstance
                     │        └──< WorkflowActionInstance
@@ -41,13 +44,15 @@ WorkflowProcessTemplate
 
 每张 Ticket 对应且只对应一个 WorkflowProcessInstance。Action 通过 FromStep 和 ToStep 连接同一流程的两个 Step。
 
+下文涉及 FK Users 的位置均指逻辑用户模型 ApplicationUser，物理上关联 AspNetUsers，不再建立第二张独立 Users 表。Identity 相关实现放在 Infrastructure，通过 Application 接口提供能力；Domain 不因此增加对 Identity 或 EF Core 的依赖。
+
 ## 3. 固定代码
 
-角色、分类和优先级暂使用 C# Enum 与数据库数值代码，不增加独立维护表。下面的数值是草案建议，上线后应保持稳定。
+角色由 Identity 的角色表及关联表管理，预置固定角色名称，不在用户表再保存 Role 列。分类、优先级和消息类型使用 C# Enum 与数据库数值代码，下面的代码为草案建议。
 
 | 数据 | 建议代码 |
 | --- | --- |
-| Role | 1 Employee；2 SupportITStaff；3 SupportAdmin；4 SystemAdmin |
+| Identity Role Name | EMPLOYEE、SUPPORT_IT_STAFF、SUPPORT_ADMIN、SYSTEM_ADMIN；角色 Id 由数据库产生，不假定为 1 至 4 |
 | Category | 1 Hardware；2 Software；3 Network；4 Account；5 Other |
 | Priority | 1 Low；2 Medium；3 High；4 Critical |
 | MessageType | 1 PublicReply；2 InternalNote |
@@ -57,24 +62,43 @@ WorkflowProcessTemplate
 
 Step Code 表达业务状态，WorkflowProcessInstance.Status 表达整个流程是否结束，两者含义不同。没有 Pending 或 Reopened 业务状态。
 
-## 4. 业务表
+## 4. 账号与业务表
 
-### 4.1 Users
+### 4.1 Identity 账号与角色
+
+建议沿用以下基础表结构；存在这些框架表不代表第一版开启外部登录、角色自定义或其他未确认功能。
+
+| 表 | 用途及建议主键 |
+| --- | --- |
+| AspNetUsers | 账号；ApplicationUser 继承 IdentityUser<int>，int 主键 |
+| AspNetRoles | 四个固定角色；IdentityRole<int>，int 主键 |
+| AspNetUserRoles | 用户与角色关联；标准 (UserId, RoleId) 复合主键，另为 UserId 建唯一索引 |
+| AspNetUserClaims | Identity 用户 Claims；int 主键 |
+| AspNetRoleClaims | Identity 角色 Claims；int 主键 |
+| AspNetUserLogins | Identity 外部登录关联存储；标准复合主键，第一版不因此启用外部登录 |
+| AspNetUserTokens | Identity 用户 Token 存储；标准复合主键，不代表已经采用 Refresh Token 或逐个存储 JWT |
+
+AspNetUsers 的重点字段如下；其余 Identity 标准字段由框架模型提供，具体长度按 EF 配置落实。
 
 | 字段 | 建议类型 | 用途 |
 | --- | --- | --- |
 | Id | int IDENTITY，PK | 用户标识 |
 | Email / NormalizedEmail | nvarchar(256) | 登录 Email / 用于唯一比较的规范化值 |
+| UserName / NormalizedUserName | nvarchar(256) | Identity 账号标识；建议与 Email 对齐并统一更新 |
 | FullName | nvarchar(200) | 显示姓名 |
-| PasswordHash | nvarchar(max) | 使用可靠密码 Hash 组件的输出 |
-| Role | tinyint | 单个角色代码 |
+| PasswordHash | nvarchar(max) | 由 Identity 管理，不自行实现密码 Hash 格式 |
+| SecurityStamp | nvarchar(max) | 参考 Project1，用于凭据及会话失效校验 |
+| AccessFailedCount / LockoutEnabled | int / bit | 登录失败计数及是否允许锁定 |
+| LockoutEnd | datetimeoffset(7) NULL | 锁定结束时间 |
 | IsActive | bit | 账号是否可用 |
 | CreatedAtUtc / UpdatedAtUtc | datetimeoffset(7) | 建立和更新时间 |
-| RowVersion | rowversion | 并发标记 |
+| ConcurrencyStamp | nvarchar(max) | Identity 账号并发标记；其余业务表仍按各自设计使用 rowversion |
 
-NormalizedEmail 建唯一索引。没有 UsersRoles 多对多表。密码算法及身份框架尚未选定，不保存明文密码。
+NormalizedEmail 需显式配置唯一索引，不只依赖服务层唯一 Email 验证。不保存明文密码；密码 Hash、校验和登录控制使用 Identity 组件。
 
-后续认证参考 Project1 的 JWT Bearer 实现。Project1 使用完整 ASP.NET Core Identity，具有 SecurityStamp、登录失败计数和锁定等账号字段，以及 Identity 的角色关联表；当前 16 表草案尚未包含这些完整结构。首次 Migration 前需确定是否采用 Identity，或在单角色 Users 上补充所需的会话版本 / 登录控制字段，再修订本节和表数量。参考 JWT 不表示直接复制多角色模型，也不表示这些字段已经建立。
+单角色约束分两层：AspNetUserRoles.UserId 的唯一索引保证最多一个角色；创建账号和调整角色的服务在同一事务中保证完成后恰好一个角色，失败整体回滚。不能因为 Identity 支持多个角色而开放给 Helpdesk，也不能把角色直接写入用户 Claims 来绕过该约束。
+
+JWT 只签发这个账号唯一的业务角色。角色变更及停用后的会话失效参考 Project1 的 SecurityStamp，但具体有效期、刷新、退出和密码策略仍在认证阶段确定。Identity 表和内部账号存储服务已建立；数据库只预置角色，不创建默认账号。登录和 JWT API 尚未实现。
 
 ### 4.2 Tickets
 
@@ -183,10 +207,10 @@ ReturnOutcome 是代理记录的技术处理结果，不是 Ticket 状态；枚�
 | --- | --- |
 | WorkflowProcessTemplate | Id、Code、Name、EntityType（Ticket）、Version、IsPublished、IsActive、CreatedByUserId、CreatedAtUtc、PublishedAtUtc、RowVersion |
 | WorkflowStepTemplate | Id、ProcessTemplateId、Code、Name、DisplayOrder、IsInitial、IsTerminal |
-| WorkflowActionTemplate | Id、FromStepTemplateId、ToStepTemplateId、Code、Name、RequiresComment |
+| WorkflowActionTemplate | Id、ProcessTemplateId、FromStepTemplateId、ToStepTemplateId、Code、Name、RequiresComment |
 | WorkflowActionerTemplate | Id、ActionTemplateId、ActionerType、ActionerRole、ActionerUserId |
 
-通用类型：Id 与指向这些表的 FK 使用 bigint；Code 建议 nvarchar(64)，Name nvarchar(200)，EntityType nvarchar(64)，Version / DisplayOrder 为 int，标志为 bit，时间为 datetimeoffset(7)。ActionerRole 使用与 Users.Role 相同的代码，ActionerUserId 为指向 Users 的 int FK。
+通用类型：Id 与指向这些表的 FK 使用 bigint；Code 建议 nvarchar(64)，Name nvarchar(200)，EntityType nvarchar(64)，Version / DisplayOrder 为 int，标志为 bit，时间为 datetimeoffset(7)。ActionerRole 建议为 nvarchar(64)，保存第 3 节固定的 Identity Role Name；ActionerUserId 为指向 AspNetUsers 的 int FK。
 
 ActionerType 建议支持 Requester、CurrentAssignee、Role、User：
 
@@ -216,9 +240,9 @@ System Admin 可编辑范围仍需审核。第一版至少应保护约定的状�
 
 | 表 | 建议主要字段 |
 | --- | --- |
-| WorkflowProcessInstance | Id、TicketId、ProcessTemplateId、TemplateCode、TemplateName、TemplateVersion、CurrentStepInstanceId、Status、StartedAtUtc、CompletedAtUtc、RowVersion |
+| WorkflowProcessInstance | Id、TicketId、ProcessTemplateId、TemplateCode、TemplateName、TemplateVersion、CurrentStepInstanceId、CurrentStepProcessInstanceId（EF shadow property）、Status、StartedAtUtc、CompletedAtUtc、RowVersion |
 | WorkflowStepInstance | Id、ProcessInstanceId、SourceStepTemplateId、Code、Name、DisplayOrder、IsInitial、IsTerminal |
-| WorkflowActionInstance | Id、FromStepInstanceId、ToStepInstanceId、SourceActionTemplateId、Code、Name、RequiresComment |
+| WorkflowActionInstance | Id、ProcessInstanceId、FromStepInstanceId、ToStepInstanceId、SourceActionTemplateId、Code、Name、RequiresComment |
 | WorkflowActionerInstance | Id、ActionInstanceId、SourceActionerTemplateId、ActionerType、ActionerRole、ActionerUserId |
 
 快照字段的类型沿用对应 Template。TicketId、SourceTemplate FK 及 Step / Action FK 使用 bigint。ProcessInstance.Status 存 Running / Completed 代码；CurrentStepInstanceId 在对外可见的已建立实例中必须有值。
@@ -236,7 +260,7 @@ Requester 在建立实例时可将该 Ticket 的提交人 Id 固定保存到 Act
 - Action 的两个 Step 必须属于同一个 ProcessInstance。
 - SourceTemplate 关联用于追溯，运行时使用 Instance 快照，不读取新模板替换旧步骤。
 
-同流程关联应通过服务验证及适当的复合 FK 保护。删除已引用的模板、用户、Ticket 或流程记录不能造成历史级联丢失。
+同流程关联已通过复合 FK 保护。CurrentStepProcessInstanceId 由 DbContext 保存时同步为当前流程 Id；CHECK 约束保证所属列与主键相等，再通过复合 FK 验证该步骤属于此流程。它避免可空步骤关系直接共享流程主键而影响插入。流程 Id 使用 sequence / HiLo，在保存前分配稳定标识。删除引用采用 NoAction，保护历史；完整流程启动和权限仍在后续服务阶段实现。
 
 ## 7. WorkflowHistory
 
@@ -283,7 +307,8 @@ ActionInstance 是该 Ticket 的可用动作副本，WorkflowHistory 才是每�
 
 ## 9. 索引与删除策略建议
 
-- Users：NormalizedEmail 唯一。
+- AspNetUsers：NormalizedEmail 唯一；保留 Identity 标准账号索引。
+- AspNetUserRoles：UserId 唯一，保证同一账号最多关联一个角色；服务事务保证完成操作后恰好一个角色。
 - Tickets：(RequestedByUserId, CreatedAtUtc)、(AssignedToUserId, CreatedAtUtc)；未分配查询可按实际 SQL 增加筛选索引。
 - TicketMessages、Attachments、TicketHistories：按 TicketId 建索引；消息及历史追加时间和 Id，支持稳定排序。
 - Delegations：按 SourceUserId、StartsAtUtc、EndsAtUtc 查询有效安排。
@@ -296,7 +321,7 @@ SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAc
 
 ## 10. 审核与验证清单
 
-- 16 张核心表的关系和名称与需求一致。
+- Identity 七张基础表与其余 15 张业务和工作流表的关系、名称与需求一致；最终数量按实际生成的 Migration 核对。
 - 每用户单角色，Staff 的访问依据当前负责人，而不是通用 Staff 角色或历史参与关系。
 - 只有四个业务状态，Resolved 仍 Running，Closed 才 Completed。
 - 模板支持 Reopen 循环，版本副本隔离，配置不能绕过工单业务权限。
@@ -316,4 +341,15 @@ SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAc
 - 已应用的版本由 EF 的迁移历史跟踪；部署携带已有 Migration，不在服务器重新生成源码。
 - 首次创建开发数据库、已有数据库的升级，以及多实例发布时的权限与协调方式，在实现和部署阶段分别验证。
 
-完整流程及验收场景见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。本次只更新设计文档，未连接 SQL Server，也未创建或执行数据库 Migration。
+完整流程及验收场景见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。阶段 1 已创建数据库、生成并应用 Migration，具体结果见下节。
+
+## 12. 本地开发连接确认
+
+| 项目 | 已确认内容 |
+| --- | --- |
+| SQL Server | BIN |
+| 计划数据库名称 | HelpDeskDb |
+| 认证方式 | Windows Authentication，使用本机开发进程的 Windows 身份 |
+| 2026-10-24 阶段 1 结果 | HelpDeskDb 已建立；22 张应用表及 EF 迁移历史，4 个角色，无默认账号 |
+
+该配置只针对本地 Windows 开发，不预设 Docker 或生产环境使用相同连接方式。已应用 InitialCreate、AddWorkflowInstanceSequence 和 FixCurrentStepOwnership。所有外键均启用并受信任；单角色唯一索引已验证。11 项单元测试、5 项 SQL Server 集成测试通过，无跳过；测试数据已回滚或清理，业务用户、工单和流程实例均为 0。
