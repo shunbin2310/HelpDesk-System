@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "d1ea681f-b979-4199-b9be-6d5bd85e0ca5",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\candidate.json",
+  "output": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\helpdesk.html",
+  "specification": {
+    "sha256": "266f7da807df5b32bcd151fcfbf1933d3bec46c927f83026272afaba3970c4b8",
+    "bytes": 8387
+  },
+  "artifact": {
+    "sha256": "a0011f8089e7919c4df8d6f703cbfcc6ae9a889191cc2f221034c83e7e4a49ac",
+    "bytes": 833237
+  }
+}

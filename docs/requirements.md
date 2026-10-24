@@ -54,7 +54,11 @@ Migration 管理参考公司项目 API 启动时查询并应用待执行 Migrati
 
 每个用户账号只分配一个角色，采用 Email + Password 登录。Email 唯一，姓名用于显示。账号由 System Admin 创建、分配角色及停用，不开放自行注册；密码以 Hash 保存。
 
-已确认采用 ASP.NET Core Identity 管理账号，并参考 Project1 使用 JWT Bearer 提供 API 身份凭证，具体适配见[实施计划](implementation-plan.md)。每个账号只能关联一个角色；Identity 的标准角色关联结构需要加上单角色约束。阶段 1 已实现 Identity 模型及内部账号存储，尚未接入登录和 JWT API；令牌存储、有效期、退出和会话失效策略仍需在认证阶段确定。
+首个 System Admin 使用一次性本地 `bootstrap-admin` 命令创建，Email、姓名和隐藏输入的密码由用户在交互式 Development 终端输入；不在代码中预置固定密码。阶段 2 已实现该命令，操作方式见 README；当前没有保留默认账号或测试账号。
+
+阶段 2 已实现 JWT（60 分钟）、sessionStorage、当前用户查询、角色授权、System Admin 用户管理和用户修改密码。停用、角色改变或密码改变使旧 Token 失效；最后一个可用 System Admin 不能被停用或降级。密码至少 10 位且包含大小写、数字、符号，连续错误 5 次锁定 15 分钟。退出清理浏览器会话，暂不加入 Refresh Token、逐 Token 撤销和邮件找回。
+
+采用 ASP.NET Core Identity 管理账号，并参考 Project1 使用 JWT Bearer 提供 API 身份凭证，具体适配见[实施计划](implementation-plan.md)。每个账号只能关联一个角色，数据库唯一索引及账号服务共同保障；阶段 2 已接入登录和 JWT API，会话策略按上述设置执行。
 
 | 能力 | Employee | Support IT Staff | Support Admin | System Admin |
 | --- | --- | --- | --- | --- |
@@ -78,12 +82,14 @@ Support IT Staff 不设用于提交问题的 My Tickets 入口。Ticket 转派�
 
 | 字段 | 规则 |
 | --- | --- |
-| Title | 必填，问题标题 |
-| Description | 必填，问题描述 |
+| Title | 必填，问题标题，最多 200 字符 |
+| Description | 必填，问题描述，最多 4000 字符 |
 | Category | 必填：Hardware、Software、Network、Account、Other |
 | Attachments | 可选，截图或相关文件 |
 
 提交人及提交时间由系统记录，不能由浏览器指定其他提交人。新工单进入 Open，默认优先级为 Medium，初始未分配。
+
+已确认编号格式 `HD-20261024-000001`：创建日期按马来西亚时间，后缀使用全局递增 ID，至少 6 位，不按天重置，允许跳号。阶段 4 已实现 Ticket 表单、列表、详情、状态筛选及分页（25 条），并与流程实例、START 历史在同一事务创建；失败完整回滚。
 
 优先级为 Low、Medium、High、Critical，由 Support Admin / System Admin 调整。普通 Employee 和 Support IT Staff 不调整优先级。
 
@@ -123,6 +129,8 @@ Employee 提交 → Open
 ## 5. Assignment
 
 Support Admin / System Admin 使用 Ticket Assignment 页面分配和重新分配 Ticket。分配只改变负责人，不改变工单状态，也不会因为新负责人接手就自动回到 Open。
+
+阶段 4 已实现 Assignments 入口及详情页管理表单，只允许选择启用的 Support IT Staff；分配、转派和优先级变更写入 TicketHistory，同值保存不重复记历史。使用 Ticket RowVersion 拒绝过期编辑；流程动作使用独立的流程 RowVersion。转派后原 Staff 的列表、详情和操作接口均拒绝访问。
 
 负责人只能是可用的 Support IT Staff。每次分配记录原负责人、新负责人、操作人、时间，以及适用的说明。
 
@@ -210,6 +218,10 @@ Actioner 至少需表达：
 
 只有 System Admin 可以管理和发布模板。可编辑步骤、动作、角色和备注要求的具体范围仍需确认；模板配置始终不能绕过工单可见性、Closed 终点及仅提交人确认等业务约束，System Admin 管理覆盖除外。
 
+阶段 3 已实现默认模板初始化及只读查看页。System Admin 在 Workflow 页首次初始化 `HELPDESK_TICKET` V1；重复调用保留现有启用模板，不覆盖版本或启用已停用配置。当前默认备注可选，引擎支持模板配置要求备注，单次备注最多 4000 字符；完整编辑入口保留到阶段 6。
+
+Workflow Engine 已实现实例复制、可用动作、权限和 History。执行动作时以当前用户身份和数据库当前负责人校验，通过 Ticket 行锁及流程 RowVersion 防止负责人竞争和重复提交。阶段 4 已由内部 Ticket 创建用例接入流程启动，在同一事务创建并完整回滚；前端按钮复用流程 API。
+
 ## 9. 第一版验收场景
 
 1. Employee 创建必填字段完整的 Ticket，进入 Open / Medium，提交身份来自当前登录用户。
@@ -232,7 +244,7 @@ Actioner 至少需表达：
 - 附件限制、存储方式和消息修改策略。
 - 代理边界与调度方式，尤其是人员停用和重叠安排。
 - 工作流配置页的可编辑范围，以及哪些动作必须填写说明。
-- 工单编号格式、字段长度，以及模板和数据库的部署初始化方式。
+- 附件相关字段和限额，以及模板和数据库的部署初始化方式；工单编号和核心表单长度已在阶段 4 确定。
 - UI 组件库、Dashboard、通知，以及 GitHub Actions 触发方式、镜像仓库、服务器和 SQL Server 部署位置等细节。
 
 这些事项不妨碍审核当前数据库草案，但涉及的实现不得把草案建议当作额外已批准业务功能。

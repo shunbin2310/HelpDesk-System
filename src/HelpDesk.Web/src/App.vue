@@ -1,71 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { getHealth } from './services/health'
-
-type ConnectionState = 'checking' | 'connected' | 'unavailable'
-
-const connection = ref<ConnectionState>('checking')
-const lastCheckedAt = ref<string | null>(null)
-const statusLabel = computed(() => ({
-  checking: 'Checking connection',
-  connected: 'Service connected',
-  unavailable: 'Service unavailable',
-})[connection.value])
-
-async function checkConnection() {
-  connection.value = 'checking'
-
-  try {
-    const health = await getHealth()
-    connection.value = health.status === 'healthy' ? 'connected' : 'unavailable'
-  } catch {
-    connection.value = 'unavailable'
-  } finally {
-    lastCheckedAt.value = new Date().toLocaleTimeString()
-  }
-}
-
-onMounted(checkConnection)
+import { nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { roles, session, setSession } from './services/session'
+import { canManageTickets } from './services/tickets'
+const route = useRoute(), router = useRouter()
+const titles: Record<string, string> = { '/users': 'User accounts', '/workflow': 'Ticket workflow', '/password': 'Change password', '/login': 'Sign in', '/tickets': 'Tickets', '/tickets/new': 'Submit ticket', '/assignments': 'Ticket assignment' }
+watch(() => route.path, async () => {
+  document.title = `${titles[route.path] ?? (route.path.startsWith('/tickets/') ? 'Ticket details' : 'Workspace')} · Helpdesk`
+  await nextTick()
+  document.getElementById('main')?.focus()
+})
+watch(session, value => { if (!value && route.path !== '/login') void router.replace('/login') })
+async function logout() { setSession(null); await router.replace('/login') }
 </script>
 
 <template>
-  <main class="workspace">
-    <header class="brand">
-      <span class="brand-mark" aria-hidden="true">H</span>
-      <span>Helpdesk</span>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div :class="['app', { 'login-app': route.path === '/login' }]">
+    <header class="app-header">
+      <RouterLink class="brand" :to="session ? '/' : '/login'"><span class="brand-mark" aria-hidden="true">H</span><span>Helpdesk</span></RouterLink>
+      <nav v-if="session && route.path !== '/login'" aria-label="Main navigation"><RouterLink to="/" exact-active-class="selected">Workspace</RouterLink><RouterLink to="/tickets" active-class="selected">Tickets</RouterLink><RouterLink v-if="canManageTickets(session.user.role)" to="/assignments" active-class="selected">Assignments</RouterLink><RouterLink v-if="session.user.role === 'SYSTEM_ADMIN'" to="/users" active-class="selected">Users</RouterLink><RouterLink v-if="session.user.role === 'SYSTEM_ADMIN'" to="/workflow" active-class="selected">Workflow</RouterLink><RouterLink to="/password" active-class="selected">Password</RouterLink></nav>
+      <div v-if="session && route.path !== '/login'" class="account-menu"><div><strong>{{ session.user.fullName }}</strong><span>{{ roles[session.user.role] }}</span></div><button @click="logout">Sign out</button></div>
+      <span v-else class="header-caption">IT SUPPORT PORTAL</span>
     </header>
-
-    <section class="welcome-card" aria-labelledby="welcome-title">
-      <p class="eyebrow">IT SUPPORT PORTAL</p>
-      <h1 id="welcome-title">Your helpdesk starts here.</h1>
-      <p class="intro">
-        One place to report IT issues, follow updates, and get back to work.
-      </p>
-
-      <div class="connection-panel">
-        <div class="connection-summary" role="status" aria-live="polite">
-          <span class="status-dot" :class="connection" aria-hidden="true"></span>
-          <div>
-            <p class="status-label">{{ statusLabel }}</p>
-            <p v-if="lastCheckedAt" class="last-checked">
-              Last checked at {{ lastCheckedAt }}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          :disabled="connection === 'checking'"
-          @click="checkConnection"
-        >
-          {{ connection === 'checking' ? 'Checking…' : 'Check connection' }}
-        </button>
-      </div>
-
-      <p v-if="connection === 'unavailable'" class="connection-help">
-        We could not reach the support service. Please try again.
-      </p>
-    </section>
-
-    <footer>Helpdesk System · Company IT Support</footer>
-  </main>
+    <main id="main" tabindex="-1" :class="route.path === '/login' ? 'login-main' : 'workspace'"><RouterView /></main>
+    <footer>Helpdesk System <span aria-hidden="true">·</span> Company IT Support</footer>
+  </div>
 </template>
