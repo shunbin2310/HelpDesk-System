@@ -24,4 +24,8 @@
     <File Path="docs/requirements.md" />
     <File Path="docs/database-design.md" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HelpDesk.UnitTests/HelpDesk.UnitTests.csproj" />
+    <Project Path="tests/HelpDesk.IntegrationTests/HelpDesk.IntegrationTests.csproj" />
+  </Folder>
 </Solution>
