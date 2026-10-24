@@ -13,12 +13,14 @@
 | 核心角色、Ticket 流程、Assignment、Delegation 规则 | 已讨论并记录；边界事项单独列为待确认 |
 | SQL Server 数据库基础 | 已建立 BIN / HelpDeskDb，22 张应用表及 Migration 历史；阶段 1 已验证 |
 | 本地开发连接 | BIN / HelpDeskDb / Windows Authentication；数据库已创建并应用全部 Migration |
-| 账号基础 | 已实现 Identity 模型、内部账号存储及单角色约束；JWT 和登录 API 待阶段 2 实现 |
+| 账号基础 | 已完成 Identity、JWT、当前用户、四角色权限和账号管理；真实管理员由用户本机初始化 |
 | Api / Application / Domain / Infrastructure | 已建立 .NET 10 项目及引用 |
-| Web | 已建立 Vue 3 + TypeScript + Vite 骨架 |
+| Web | 已实现登录、工作区、用户管理、修改密码、Workflow 初始化及路由权限 |
+| Workflow Engine | 已完成模板复制、权限、合法动作、History、并发保护及事务回滚 |
+| Ticket 核心闭环 | 已完成提交、可见性、列表 / 详情、分配 / 转派 / 优先级、动作及历史 |
 | API Health 与开发代理 | 已实现 `/health` 及前端 `/api/health` 代理 |
-| 前后端构建与基础连通 | 2026-10-23 已验证；本次编写计划未重新运行服务 |
-| 阶段 1 测试 | 11 项单元测试、5 项 SQL Server 集成测试通过；登录和 Ticket 等业务功能仍待后续阶段 |
+| 前后端构建与基础连通 | 2026-10-24 已验证；桌面和 375px 布局、真实登录及用户列表通过 |
+| 当前测试 | 48 项单元测试、14 项 SQL Server 集成测试通过，无跳过 |
 
 开发遵循 Api → Application + Infrastructure、Application → Domain、Infrastructure → Application 的引用方向。Frontend 位于 `src/HelpDesk.Web`，通过 HTTP 调用 Api。
 
@@ -31,11 +33,11 @@
        ↓
 1. Domain + EF Core + SQL Server（已完成）
        ↓
-2. 登录、权限及用户管理
+2. 登录、权限及用户管理（已完成）
        ↓
-3. Workflow Engine 与默认模板
+3. Workflow Engine 与默认模板（已完成）
        ↓
-4. Ticket 创建、分配及完整状态流程
+4. Ticket 创建、分配及完整状态流程（已完成）
        ↓
 5. 回复、内部备注、附件及历史页面
        ↓
@@ -80,7 +82,7 @@
 - [x] 添加仓库级 dotnet-ef 工具清单及设计时 Factory，模型一致性检查通过。
 - [x] 更新 README 的连接、启动迁移、生成 Migration 和测试步骤。
 
-本轮新增代码位于 Domain、Application/Users、Infrastructure、Api 的启动配置及两个测试项目。JWT 签发、登录及用户管理 API、Workflow Engine、Ticket 页面和 Delegation 后台任务尚未实现。
+阶段 1 新增代码位于 Domain、Application/Users、Infrastructure、Api 的启动配置及两个测试项目。登录及用户管理在阶段 2 完成；Workflow Engine 在阶段 3 完成；Ticket 页面在阶段 4 完成；Delegation 后台任务仍留在后续阶段。
 
 验证结果：
 
@@ -101,58 +103,84 @@
 
 目标：让四个角色使用真实账号进入系统，后端能够识别当前用户并限制操作。
 
-已确认 ASP.NET Core Identity + JWT，并限制每个账号一个角色。实现前仍需确认：令牌存储位置、有效期、是否需要 Refresh Token、退出是否要求服务端立即失效、首个 System Admin 的初始化、初始密码交付与重置，以及账号停用和角色变更后的会话处理。Identity 表结构及单角色约束在阶段 1 生成 Migration 前落实。
+已确认 ASP.NET Core Identity + JWT，每个账号一个角色。首个 System Admin 通过一次性本地初始化命令创建，由用户在终端输入 Email、姓名和密码，不在代码中预置固定密码；后续账号由 System Admin 在网页管理。Identity 表结构及单角色约束已在阶段 1 完成。具体范围和默认设置已获用户继续实施授权，并于 2026-10-24 完成。
 
 工作内容：
 
-- [ ] 实现 Email + Password 登录及退出流程。
-- [ ] 参考 JwtOptions / JwtTokenService 实现 JWT 签发和 Bearer 验证，配置独立的 Issuer、Audience、SigningKey 和有效期。
-- [ ] 使用密码 Hash 组件，规范化 Email，执行唯一性检查。
-- [ ] 建立后端 CurrentUserContext 和角色授权策略，身份取自经过验证的凭据。
-- [ ] 参考 Project1 的用户可用性及 SecurityStamp 校验，实现经确认的停用、角色变更和会话失效规则。
-- [ ] 实现 System Admin 创建账号、分配一个角色、停用账号的 API 和页面。
-- [ ] 建立前端登录页、基础导航及路由权限。
-- [ ] 参考 Project1 的 authService、API 请求封装和路由守卫，统一附带 Bearer Token 并处理过期、401、403；适配 Helpdesk 现有的 `/api` 开发代理。
-- [ ] 按已确认方式初始化首个 System Admin，避免使用提交到仓库的固定默认密码。
-- [ ] 建立相应测试项目，验证登录、停用、重复 Email、单角色和越权访问。
+- [x] 实现 Email + Password 登录及退出流程。
+- [x] 参考 JwtOptions / JwtTokenService 实现 JWT 签发和 Bearer 验证，配置独立的 Issuer、Audience、SigningKey 和有效期。
+- [x] 使用密码 Hash 组件，规范化 Email，执行唯一性检查。
+- [x] 建立后端 CurrentUserContext 和角色授权策略，身份取自经过验证的凭据。
+- [x] 参考 Project1 的用户可用性及 SecurityStamp 校验，实现经确认的停用、角色变更和会话失效规则。
+- [x] 实现 System Admin 创建账号、分配一个角色、停用账号的 API 和页面。
+- [x] 建立前端登录页、基础导航及路由权限。
+- [x] 参考 Project1 的 authService、API 请求封装和路由守卫，统一附带 Bearer Token 并处理过期、401、403；适配 Helpdesk 现有的 `/api` 开发代理。
+- [x] 按已确认方式初始化首个 System Admin，避免使用提交到仓库的固定默认密码。
+- [x] 建立相应测试项目，验证登录、停用、重复 Email、单角色和越权访问。
 
 完成标准：四种角色可以分别登录；只有 System Admin 可以管理账号；修改浏览器提交的 UserId 或 Role 不能获得额外权限。
+
+### 阶段 2 实施结果（2026-10-24）
+
+1. 增加本地 bootstrap-admin 命令：交互读取 Email、姓名和隐藏输入的密码，仅在没有 System Admin 账号时初始化；成功后退出，不开放匿名初始化 HTTP 接口，也不在日志输出密码。
+2. 增加登录和当前用户接口、JWT 签发和验证、CurrentUserContext。HTTP 入口放在 Api，接口与 DTO 放在 Application，Identity 和 Token 具体实现放在 Infrastructure。
+3. 增加 System Admin 的用户列表、创建账号、单角色调整、启用或停用，以及密码重置接口；保护最后一个可用的 System Admin，避免误操作失去管理入口。
+4. 增加前端登录页、基础登录导航、当前用户信息、用户管理及修改密码入口；统一处理 401 和 403，继续沿用现有 /api 开发代理。
+5. 增加登录、Token 验证、角色权限、会话失效、初始化及用户管理测试，并保留阶段 1 的数据库测试。
+
+已实现的默认设置：
+
+- JWT Access Token 有效期 60 分钟，参考 Project1 使用 sessionStorage；暂不加入 Refresh Token，过期后重新登录。
+- 退出清除当前浏览器的登录信息；不新增逐 Token 撤销表。账号停用、角色变更或密码变更通过用户状态 / SecurityStamp 使旧 Token 失效。
+- 参考 Project1：密码至少 10 位，包含大小写字母、数字和符号；密码错误累计 5 次锁定 15 分钟。
+- System Admin 创建用户时设置初始密码；用户可修改自己的密码，遗忘密码由 System Admin 重置，暂不加入邮件找回流程。
+- 使用 Helpdesk 自己的 Issuer、Audience 和签名配置，SigningKey 不提交到仓库。首次管理员密码仍由用户在本机交互输入，测试只使用可清理的临时账号。
+
+本轮不实现 Ticket 业务、Workflow Engine、Delegation 自动处理或部署配置。本轮没有数据库模型或 Migration 变更。验证：18 项单元测试、6 项 SQL Server 集成测试全部通过；CLI 隐藏密码初始化、浏览器登录、受保护用户列表、弹窗键盘焦点和 375px 布局已验证。真实管理员仍由用户通过 CLI 创建，测试账号已清理。
 
 ## 6. 阶段 3：Workflow Engine 与默认模板
 
 目标：参考 Project1，建立 Helpdesk 自己的 Template + Instance + History 流程引擎。
 
+状态：2026-10-24 已完成。
+
 工作内容：
 
-- [ ] 实现 WorkflowProcess / Step / Action / Actioner 的 Template 与 Instance 处理。
-- [ ] 预置 Helpdesk Workflow V1：OPEN、IN_PROGRESS、RESOLVED、CLOSED。
-- [ ] 定义 START_PROCESSING、RESOLVE、CLOSE、REOPEN。
-- [ ] 支持 Requester 和动态 CurrentAssignee；按已确认配置范围处理 Role / User。
-- [ ] 实现启动流程、查询流程及可用动作、执行动作和追加 History。
-- [ ] 允许 RESOLVED → IN_PROGRESS，只有 CLOSED 才标记流程 Completed。
-- [ ] 复制模板版本到实例，使旧工单不受后续模板发布影响。
-- [ ] 使用业务权限检查和并发控制，限制非法跳转及重复提交。
-- [ ] 验证模板版本隔离、操作人权限、Reopen 循环和事务回滚。
+- [x] 实现 WorkflowProcess / Step / Action / Actioner 的 Template 与 Instance 处理。
+- [x] 预置 Helpdesk Workflow V1：OPEN、IN_PROGRESS、RESOLVED、CLOSED。
+- [x] 定义 START_PROCESSING、RESOLVE、CLOSE、REOPEN。
+- [x] 支持 Requester 和动态 CurrentAssignee；按已确认配置范围处理 Role / User。
+- [x] 实现启动流程、查询流程及可用动作、执行动作和追加 History。
+- [x] 允许 RESOLVED → IN_PROGRESS，只有 CLOSED 才标记流程 Completed。
+- [x] 复制模板版本到实例，使旧工单不受后续模板发布影响。
+- [x] 使用业务权限检查和并发控制，限制非法跳转及重复提交。
+- [x] 验证模板版本隔离、操作人权限、Reopen 循环和事务回滚。
 
 分配、重新分配和代理不是状态跳转，交由 Ticket / Delegation 业务处理。CurrentAssignee 按 Ticket 当前负责人动态判断，不把 Staff 角色配置为全部可操作。
 
 完成标准：流程引擎可以执行约定的四状态流程，保留完整历史，并拒绝错误身份及不适用于当前状态的动作。
 
+实施说明：默认模板由 System Admin 在 Workflow 设置页幂等初始化，保留已有启用版本；本轮只提供初始化及只读查看，不包含阶段 6 的模板编辑器。流程启动为内部服务，供阶段 4 的 Ticket 创建事务调用，不开放独立启动 HTTP。
+
+验证结果：42 项单元测试、10 项 SQL Server 集成测试通过，无跳过；桌面与 375px 页面、默认模板初始化及刷新、Employee 路由限制已验证。没有新增 Migration；测试使用独立临时数据库，不修改用户现有账号或默认模板配置。
+
 ## 7. 阶段 4：Ticket 核心闭环
 
 目标：Employee、Support Admin 和 Support IT Staff 可以完成一张真实工单的全部核心处理过程。
 
+状态：2026-10-24 已完成。
+
 工作内容：
 
-- [ ] 实现 Employee 提交表单：Title、Description、Category；默认 Medium。
-- [ ] 在同一事务中创建 Ticket、流程实例和 START 历史，缺少有效模板时整体回滚。
-- [ ] 实现列表、详情、分页和必要的状态筛选。
-- [ ] Employee 只能看自己的 Ticket；Staff 只能看当前分配给自己的 Ticket；两种 Admin 可看全部。
-- [ ] 实现 Support Admin / System Admin 的 Assignment 页面、重新分配及优先级调整。
-- [ ] 实现 Start Processing、Resolve、Close、Reopen 的 API 和前端按钮。
-- [ ] 按需求落实 System Admin 的管理覆盖，同时保持合法状态限制和仅 Employee 提交的规则。
-- [ ] 记录分配和优先级变化，前端展示当前负责人和流程状态。
-- [ ] 验证负责人变化后，原 Staff 的列表、详情和操作权限立即失效。
+- [x] 实现 Employee 提交表单：Title、Description、Category；默认 Medium。
+- [x] 在同一事务中创建 Ticket、流程实例和 START 历史，缺少有效模板时整体回滚。
+- [x] 实现列表、详情、分页和必要的状态筛选。
+- [x] Employee 只能看自己的 Ticket；Staff 只能看当前分配给自己的 Ticket；两种 Admin 可看全部。
+- [x] 实现 Support Admin / System Admin 的 Assignment 页面、重新分配及优先级调整。
+- [x] 实现 Start Processing、Resolve、Close、Reopen 的 API 和前端按钮。
+- [x] 按需求落实 System Admin 的管理覆盖，同时保持合法状态限制和仅 Employee 提交的规则。
+- [x] 记录分配和优先级变化，前端展示当前负责人和流程状态。
+- [x] 验证负责人变化后，原 Staff 的列表、详情和操作权限立即失效。
 
 核心演示路径：
 
@@ -167,6 +195,10 @@ Employee Close → Closed
 另一条验收路径是 Resolved → Employee Reopen → In Progress → 再次 Resolve。Closed 不允许 Reopen，需要新建 Ticket。
 
 完成标准：不同角色在界面中走通上述流程；直接调用 API 也不能越权或跳过状态。附件功能在阶段 5 补齐，本阶段不视为完整第一版。
+
+实施结果：新增 Application/Tickets 契约、Infrastructure/Tickets 服务和 Api/TicketEndpoints；Vue 提供列表、提交、详情及 Assignment 入口，复用现有 Workflow 动作。编号已确认使用 HD-yyyyMMdd-全局 ID（马来西亚日期，至少 6 位，允许跳号），Title / Description 限制 200 / 4000 字符。没有新增表、Migration 或依赖。
+
+验证：48 项单元测试、14 项 SQL Server 集成测试全部通过；浏览器以 Employee、Support Admin 和两名 IT Staff 走通提交、分配、处理、Resolve、Reopen、转派、再次 Resolve 及 Close。原 Staff 转派后详情被拒绝，375px 列表和详情无横向溢出。测试使用独立临时库，现有开发库账号和工单不受测试数据污染。
 
 ## 8. 阶段 5：沟通、附件与历史
 

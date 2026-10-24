@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "HelpDesk System · 当前架构与本地开发",
+    "locale": "zh-CN",
+    "output": ".archify/architecture-helpdesk-20261024-143344/helpdesk.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/shunbin2310/HelpDesk-System.git",
+      "revision": "83b180a6b803ab10efeb0960dd6284781ffb99f3",
+      "link_mode": "web"
+    }
+  },
+  "components": [
+    {
+      "id": "vue-web", "type": "frontend", "label": "Vue 3 + TypeScript",
+      "sublabel": "浏览器中的 HelpDesk.Web", "tag": "连接状态页面",
+      "pos": [40, 40], "size": [200, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Web/src/App.vue", "line": 1, "end_line": 28, "label": "页面加载与重试调用" },
+        { "path": "src/HelpDesk.Web/src/services/health.ts", "line": 7, "end_line": 16, "label": "HTTP 健康检查" },
+        { "path": "src/HelpDesk.Web/package.json", "line": 9, "end_line": 23, "label": "Vue 与构建工具" }
+      ]
+    },
+    {
+      "id": "vite-dev", "type": "backend", "label": "Vite 开发服务器",
+      "sublabel": "localhost:5173 · 开发代理", "tag": "npm run dev",
+      "pos": [390, 40], "size": [200, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Web/vite.config.ts", "line": 4, "end_line": 18, "label": "端口及 /api 重写" },
+        { "path": "README.md", "line": 110, "end_line": 118, "label": "构建与生产路由限制" }
+      ]
+    },
+    {
+      "id": "dotnet-api", "type": "backend", "label": ".NET 10 Minimal API",
+      "sublabel": "localhost:5080 · /health", "tag": "HelpDesk.Api",
+      "pos": [750, 40], "size": [220, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Api/Program.cs", "line": 5, "end_line": 18, "label": "依赖注册与启动顺序" },
+        { "path": "src/HelpDesk.Api/Endpoints/HealthEndpoints.cs", "line": 5, "end_line": 12, "label": "进程健康响应，无数据库查询" },
+        { "path": "README.md", "line": 3, "end_line": 39, "label": "技术栈、引用方向与启动地址" }
+      ]
+    },
+    {
+      "id": "startup-migration", "type": "backend", "label": "启动迁移",
+      "sublabel": "默认关闭；失败阻止 API 启动", "tag": "Infrastructure",
+      "pos": [750, 260], "size": [220, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Infrastructure/Persistence/StartupMigration/StartupDatabaseMigrator.cs", "line": 11, "end_line": 48, "label": "开关、目标校验与待执行迁移" },
+        { "path": "src/HelpDesk.Infrastructure/Persistence/StartupMigration/EfStartupMigrationDatabase.cs", "line": 5, "end_line": 23, "label": "实际 EF 迁移调用" },
+        { "path": "src/HelpDesk.Api/appsettings.json", "line": 10, "end_line": 14, "label": "默认迁移配置" }
+      ]
+    },
+    {
+      "id": "identity-store", "type": "security", "label": "ASP.NET Core Identity",
+      "sublabel": "登录 / JWT 未接入", "tag": "内部账号与角色存储",
+      "pos": [1130, 260], "size": [220, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs", "line": 20, "end_line": 27, "label": "Identity Core、角色与 EF Stores" },
+        { "path": "src/HelpDesk.Infrastructure/Identity/UserAccountStore.cs", "line": 9, "end_line": 46, "label": "内部账号创建和角色关联" },
+        { "path": "docs/requirements.md", "line": 55, "end_line": 57, "label": "认证方向与尚未实现的部分" }
+      ]
+    },
+    {
+      "id": "ef-persistence", "type": "backend", "label": "EF Core / DbContext",
+      "sublabel": "账号、工单、代理与流程模型", "tag": "HelpDesk.Infrastructure",
+      "pos": [750, 480], "size": [220, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Infrastructure/Persistence/HelpDeskDbContext.cs", "line": 13, "end_line": 41, "label": "IdentityDbContext、业务模型与保存" },
+        { "path": "src/HelpDesk.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs", "line": 14, "end_line": 24, "label": "SQL Server Provider 与 EF Stores" },
+        { "path": "src/HelpDesk.Infrastructure/HelpDesk.Infrastructure.csproj", "line": 3, "end_line": 11, "label": "框架依赖与 Application 引用" }
+      ]
+    },
+    {
+      "id": "sql-server", "type": "database", "label": "SQL Server",
+      "sublabel": "BIN · HelpDeskDb", "tag": "本地开发数据库配置",
+      "pos": [390, 480], "size": [200, 78],
+      "sources": [
+        { "path": "src/HelpDesk.Api/appsettings.Development.json", "line": 1, "end_line": 8, "label": "开发连接与 Windows Authentication" },
+        { "path": "README.md", "line": 55, "end_line": 81, "label": "数据库、迁移与 SSMS 管理" },
+        { "path": "docs/requirements.md", "line": 15, "end_line": 28, "label": "技术选型与部署待确认项" }
+      ]
+    },
+    {
+      "id": "ssms-admin", "type": "external", "label": "SSMS 管理工具",
+      "sublabel": "独立连接 BIN 查看数据库", "tag": "管理入口",
+      "pos": [40, 480], "size": [200, 78],
+      "sources": [
+        { "path": "README.md", "line": 79, "end_line": 81, "label": "SSMS 直连数据库" },
+        { "path": "README.md", "line": 27, "end_line": 29, "label": "本机认证配置及当前实现状态" }
+      ]
+    }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": ".NET API 进程内组件", "wraps": ["dotnet-api", "startup-migration", "identity-store", "ef-persistence"], "pad": 24 }
+  ],
+  "connections": [
+    { "id": "fetch-health", "from": "vue-web", "to": "vite-dev", "label": "HTTP /api/health", "variant": "emphasis" },
+    { "id": "proxy-health", "from": "vite-dev", "to": "dotnet-api", "label": "HTTP /health", "variant": "emphasis" },
+    { "id": "invoke-migration", "from": "dotnet-api", "to": "startup-migration", "label": "启动调用；默认跳过" },
+    { "id": "register-identity", "from": "dotnet-api", "to": "identity-store", "label": "DI 注册；非登录调用", "variant": "security" },
+    { "id": "migrate-via-ef", "from": "startup-migration", "to": "ef-persistence", "label": "开启且有待执行项才迁移" },
+    { "id": "identity-ef-store", "from": "identity-store", "to": "ef-persistence", "label": "内部账号操作经 EF Stores", "variant": "security" },
+    { "id": "ef-sql", "from": "ef-persistence", "to": "sql-server", "label": "SQL · Windows 身份", "variant": "security" },
+    { "id": "ssms-sql", "from": "ssms-admin", "to": "sql-server", "label": "管理连接" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "当前请求路径", "items": ["Vue 页面加载或手动重试 → fetch /api/health → Vite 去掉 /api → API /health 返回 JSON。", "健康响应只证明 API 进程可响应；不访问 SQL Server，也不验证账号或工单能力。"] },
+    { "dot": "violet", "title": "Solution 分层（非独立服务）", "items": ["Api → Application + Infrastructure；Infrastructure → Application；Application → Domain。", "Application 当前提供 IUserAccountStore 契约；Infrastructure 实现 Identity、EF Core 和迁移；Domain 保存实体、枚举和常量。", "数据库已有业务模型，Ticket API、Workflow Engine、代理后台任务和业务页面仍属后续阶段。"] },
+    { "dot": "rose", "title": "认证边界", "items": ["Identity Core + EF Stores 已注册，内部 UserAccountStore 支持创建账号和调整单角色；尚无对外用户管理或登录 API。", "Email + Password、JWT Bearer 是文档确认的后续方向；当前 API 未接入令牌签发、认证或授权中间件。", "Windows Authentication 用于 API 进程访问开发 SQL Server；SSMS 是数据库管理客户端。"] },
+    { "dot": "amber", "title": "部署证据与范围", "items": ["当前支持两个本地进程：npm run dev 提供 Vite；dotnet run 启动 API。前端独立构建为 dist。", "GitHub Actions + Docker 仅为已确认的部署方向；仓库尚无 Workflow、Dockerfile 或 Compose 配置，不绘制运行中的发布链路。", "服务器、镜像仓库、域名 / HTTPS 和生产 API 路由未确定；本图不推定 Nginx、IIS、云平台或数据库容器。", "依据 HEAD 83b180a 的代码与文档；未纳入 docs/requirements.md 与 docs/implementation-plan.md 的未提交编辑。未验证实时数据库或部署环境。"] }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\candidate.json",
+    "sha256": "266f7da807df5b32bcd151fcfbf1933d3bec46c927f83026272afaba3970c4b8",
+    "bytes": 8387
+  },
+  "artifact": {
+    "path": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\helpdesk.html",
+    "sha256": "a0011f8089e7919c4df8d6f703cbfcc6ae9a889191cc2f221034c83e7e4a49ac",
+    "bytes": 833237
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\helpdesk.finalize.json",
+    "summaryReceipt": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\helpdesk.finalize-summary.json",
+    "browserCheckReceipt": "C:\\Users\\shun bin\\source\\repos\\HelpDesk-System\\.archify\\architecture-helpdesk-20261024-143344\\helpdesk.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.2.0",
+    "availableVersion": "3.2.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-24T06:35:05.190Z",
+    "source": "network",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2343,
+  "browserCheck": {
+    "requested": true,
+    "ran": true
+  }
+}

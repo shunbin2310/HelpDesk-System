@@ -98,16 +98,18 @@ NormalizedEmail 需显式配置唯一索引，不只依赖服务层唯一 Email 
 
 单角色约束分两层：AspNetUserRoles.UserId 的唯一索引保证最多一个角色；创建账号和调整角色的服务在同一事务中保证完成后恰好一个角色，失败整体回滚。不能因为 Identity 支持多个角色而开放给 Helpdesk，也不能把角色直接写入用户 Claims 来绕过该约束。
 
-JWT 只签发这个账号唯一的业务角色。角色变更及停用后的会话失效参考 Project1 的 SecurityStamp，但具体有效期、刷新、退出和密码策略仍在认证阶段确定。Identity 表和内部账号存储服务已建立；数据库只预置角色，不创建默认账号。登录和 JWT API 尚未实现。
+JWT 只签发账号唯一的业务角色。阶段 2 已实现 60 分钟有效期、sessionStorage、JWT Bearer 和 SecurityStamp 校验；停用、角色及密码改变使旧 Token 失效。退出清理浏览器会话，暂不提供 Refresh Token 或逐 Token 撤销表，因此没有新增数据库模型或 Migration。数据库只预置角色，首个管理员由本地 bootstrap-admin 命令初始化；用户管理事务使用 SQL Server 应用锁保护并发初始化和最后可用管理员规则。
+
+阶段 3 的默认 Workflow 通过 System Admin 的幂等初始化接口创建，而非 EF 固定数据种子；CreatedByUserId 来自真实当前用户。引擎复用既有四类 Template、四类 Instance 和 WorkflowHistory，无新增表或 Migration。复制过程分批保存生成主键，处于同一事务；调用方已有事务时使用 Savepoint，失败回滚本次流程写入，由 Ticket 创建用例再回滚整个新工单事务。动作执行锁定 Ticket 行，流程更新依赖 RowVersion；分配变化本身不写 WorkflowHistory。
 
 ### 4.2 Tickets
 
 | 字段 | 建议类型 | 用途 |
 | --- | --- | --- |
 | Id | bigint IDENTITY，PK | 内部标识 |
-| TicketNumber | nvarchar(32)，UNIQUE | 展示编号；具体格式待确认 |
+| TicketNumber | nvarchar(32)，UNIQUE | HD-yyyyMMdd-全局 ID，日期按马来西亚时间，ID 至少 6 位，允许跳号 |
 | Title | nvarchar(200) | 标题 |
-| Description | nvarchar(max) | 问题描述 |
+| Description | nvarchar(max) | 问题描述；阶段 4 API 最多 4000 字符 |
 | Category / Priority | tinyint | 分类及优先级，Priority 默认 Medium |
 | RequestedByUserId | int，FK Users | 提交人，必须为 Employee |
 | AssignedToUserId | int NULL，FK Users | 当前负责人，未分配时为空 |

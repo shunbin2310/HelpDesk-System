@@ -1,4 +1,8 @@
 using HelpDesk.Application.Users;
+using HelpDesk.Application.Workflows;
+using HelpDesk.Application.Tickets;
+using HelpDesk.Infrastructure.Tickets;
+using HelpDesk.Infrastructure.Workflows;
 using HelpDesk.Infrastructure.Identity;
 using HelpDesk.Infrastructure.Persistence;
 using HelpDesk.Infrastructure.Persistence.StartupMigration;
@@ -18,10 +22,27 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 
         services.AddDbContext<HelpDeskDbContext>(options => options.UseSqlServer(connection));
-        services.AddIdentityCore<ApplicationUser>(options => options.User.RequireUniqueEmail = true)
+        services.AddAuthentication();
+        services.AddIdentityCore<ApplicationUser>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 10;
+                options.Password.RequireDigit = true;
+                options.Password.RequireLowercase = true;
+                options.Password.RequireUppercase = true;
+                options.Password.RequireNonAlphanumeric = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            })
             .AddRoles<IdentityRole<int>>()
-            .AddEntityFrameworkStores<HelpDeskDbContext>();
+            .AddEntityFrameworkStores<HelpDeskDbContext>()
+            .AddSignInManager()
+            .AddDefaultTokenProviders();
+        services.AddDataProtection();
         services.AddScoped<IUserAccountStore, UserAccountStore>();
+        services.AddScoped<IWorkflowEngine, WorkflowEngine>();
+        services.AddScoped<ITicketService, TicketService>();
+        services.AddScoped<IWorkflowTemplateService, WorkflowTemplateService>();
         services.Configure<DatabaseMigrationOptions>(configuration.GetSection(DatabaseMigrationOptions.SectionName));
         services.AddScoped<IStartupMigrationDatabase, EfStartupMigrationDatabase>();
         services.AddScoped<StartupDatabaseMigrator>();

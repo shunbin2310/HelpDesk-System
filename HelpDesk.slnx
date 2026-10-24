@@ -15,9 +15,23 @@
   <Folder Name="/src/HelpDesk.Web/src/">
     <File Path="src/HelpDesk.Web/src/App.vue" />
     <File Path="src/HelpDesk.Web/src/main.ts" />
+    <File Path="src/HelpDesk.Web/src/router.ts" />
     <File Path="src/HelpDesk.Web/src/style.css" />
     <File Path="src/HelpDesk.Web/src/vite-env.d.ts" />
-    <File Path="src/HelpDesk.Web/src/services/health.ts" />
+    <File Path="src/HelpDesk.Web/src/services/api.ts" />
+    <File Path="src/HelpDesk.Web/src/services/session.ts" />
+    <File Path="src/HelpDesk.Web/src/services/tickets.ts" />
+  </Folder>
+  <Folder Name="/src/HelpDesk.Web/src/views/">
+    <File Path="src/HelpDesk.Web/src/views/LoginView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/HomeView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/UsersView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/PasswordView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/AccessView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/WorkflowView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/TicketsView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/CreateTicketView.vue" />
+    <File Path="src/HelpDesk.Web/src/views/TicketDetailView.vue" />
   </Folder>
   <Folder Name="/docs/">
     <File Path="docs/implementation-plan.md" />
