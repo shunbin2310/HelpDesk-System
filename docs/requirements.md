@@ -48,7 +48,7 @@ Api 引用 Application 和 Infrastructure；Application 引用 Domain；Infrastr
 
 以上是参考公司项目后的组织方式。当前已建立四个 .NET 项目、Vue Web、UnitTests 和 IntegrationTests，并完成阶段 1 数据基础。启动和测试方式见 [README](../README.md)。
 
-Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的开关、目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；开启启动迁移后，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 默认关闭、部署显式开启；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。阶段 1 已实现并验证启动迁移；GitHub Actions 的 CI 配置仍留在部署阶段。
+Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；每次启动 API 时，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 不再提供启动迁移开关；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。阶段 1 已实现并验证启动迁移；GitHub Actions 的 CI 配置仍留在部署阶段。
 
 ## 2. 用户与角色
 
@@ -138,7 +138,7 @@ Support Admin / System Admin 使用 Ticket Assignment 页面分配和重新分�
 
 ### 6.1 设置与生效
 
-Delegation 由 Support Admin / System Admin 设置，指定原负责人 A、代理人 B、代理开始及结束时间。第一版为同一个 IT Support 团队内的 Staff 之间交接。
+Delegation 由 Support Admin / System Admin 设置，指定原负责人 A、代理人 B、代理开始及结束日期，不需要选择时间或 Start now。日期按马来西亚 UTC+8，开始不能早于今天；今天立即生效，未来日期在当天 00:00 生效。结束日期不能早于开始日期，允许同一天，并包含结束当天，次日 00:00 到期。前端与 API 均校验日期，旧安排的时间保持原样。第一版为同一个 IT Support 团队内的 Staff 之间交接。
 
 生效时：
 
@@ -165,9 +165,19 @@ Delegation 由 Support Admin / System Admin 设置，指定原负责人 A、代�
 
 已转回 A 的 Resolved Ticket 被 Employee Reopen 后，进入 In Progress，由 A 继续处理。所有转交、转回和人工重新分配保留历史。
 
-### 6.3 尚需确定的代理边界
+### 6.3 第一版代理边界（2026-10-25 已确认）
 
-代理重叠、A → B → C 链式代理、提前结束、取消、代理期间人员停用，以及任务调度延迟的处理尚未确认。为保持第一版简单，数据库设计建议先限制重叠和链式代理；这属于待审核建议，不是已确认规则。
+同一时间每名 Staff 只能参与一条代理，禁止重叠及 A → B → C 链式代理；不提供修改或删除；尚未开始可 Cancel，有效期间可 End early。相邻时间段允许，但未完成的上一次归还会阻止下一次交接。
+
+Source / Target 必须为启用的 IT Staff。交接前账号异常时暂停交接并提示 Admin；到期 A 无法处理时暂留 B，恢复有效 Staff 身份后自动重试。Admin 也可手动转派其他 Staff，此类安排受 AssignmentVersion 保护。
+
+后台在 API 启动和每 30 秒检查，API 停机时不运行，重启后恢复。若整段代理期已过且从未交接，不追溯交接 A 的现有工单。界面列表、工单明细分页显示，提供 Refresh 和 Needs attention 提示。
+
+### 6.4 取消与提前结束
+
+Support Admin / System Admin 可取消尚未开始的安排（Cancelled，不交接工单），或在有效期间提前结束（停止路由并按到期规则归还）。保留原计划结束时间、停止时间和操作人，禁止物理删除。Completed 不允许再次停止，重复执行同一种已成功操作返回已有结果。
+
+提前结束时 Closed 和人工转派保留；若 A 不可用，先停止路由、保留 B 当前负责的工单并提示 Needs attention，恢复后自动重试。全部待归还项处理完毕后显示 Ended early。操作与归还在同一事务内处理，使用代理 RowVersion 和现有数据库锁协调后台与人工操作。
 
 ## 7. 提交附件与处理历史
 

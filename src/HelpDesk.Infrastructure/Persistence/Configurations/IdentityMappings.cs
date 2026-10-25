@@ -28,7 +28,9 @@ internal static class IdentityMappings
         // Stable seed IDs are storage details; business code resolves roles by name.
         role.HasData(ApplicationRoles.All.Select((name, index) => new IdentityRole<int>
         {
-            Id = index + 1, Name = name, NormalizedName = name,
+            Id = index + 1,
+            Name = name,
+            NormalizedName = name,
             ConcurrencyStamp = $"helpdesk-role-{name}"
         }));
     }

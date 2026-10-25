@@ -11,7 +11,8 @@ public sealed class AttachmentReconciler(IServiceScopeFactory scopes, IAttachmen
     {
         // Only old files are candidates; an in-flight upload must never be removed.
         var keys = store.KeysOlderThan(DateTimeOffset.UtcNow.AddDays(-1)).ToArray();
-        if (keys.Length == 0) return;
+        if (keys.Length == 0)
+            return;
         await using var scope = scopes.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<TicketAttachmentWriter>().RemoveUnreferencedAsync(keys, ct);
     }
@@ -21,7 +22,10 @@ public sealed class AttachmentReconciler(IServiceScopeFactory scopes, IAttachmen
         using var timer = new PeriodicTimer(TimeSpan.FromHours(1));
         do
         {
-            try { await ReconcileAsync(stoppingToken); }
+            try
+            {
+                await ReconcileAsync(stoppingToken);
+            }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception exception) { logger.LogWarning("Attachment reconciliation will retry ({ErrorType}).", exception.GetType().Name); }
         } while (await timer.WaitForNextTickAsync(stoppingToken));

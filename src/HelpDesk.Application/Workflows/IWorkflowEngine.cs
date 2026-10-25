@@ -1,6 +1,9 @@
 namespace HelpDesk.Application.Workflows;
 
-public enum WorkflowResultStatus { Success, NotFound, Forbidden, Conflict, Invalid }
+public enum WorkflowResultStatus
+{
+    Success, NotFound, Forbidden, Conflict, Invalid
+}
 public sealed record WorkflowResult<T>(WorkflowResultStatus Status, T? Value = default, string? Error = null);
 public sealed record WorkflowActionOption(string Code, string Name, bool RequiresComment);
 public sealed record WorkflowHistoryItem(string? FromStepCode, string ToStepCode, string ActionCode,

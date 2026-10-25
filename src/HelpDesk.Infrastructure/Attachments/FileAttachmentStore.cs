@@ -21,7 +21,9 @@ public sealed class FileAttachmentStore(IOptions<AttachmentStorageOptions> optio
             await using var source = upload.OpenRead();
             await using var destination = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, useAsync: true);
             created = true;
-            var buffer = new byte[81920]; long total = 0; int read;
+            var buffer = new byte[81920];
+            long total = 0;
+            int read;
             while ((read = await source.ReadAsync(buffer, cancellationToken)) != 0)
             {
                 total += read;
@@ -29,7 +31,8 @@ public sealed class FileAttachmentStore(IOptions<AttachmentStorageOptions> optio
                     throw new AttachmentValidationException("Each attachment must be no larger than 10 MB and match its declared size.");
                 await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
-            if (total != upload.Length) throw new AttachmentValidationException("The attachment upload was incomplete.");
+            if (total != upload.Length)
+                throw new AttachmentValidationException("The attachment upload was incomplete.");
             await destination.FlushAsync(cancellationToken);
             // shortcut: signatures are not malware scanning; add a local scanner before accepting untrusted external uploads.
             AttachmentContent.Validate(destination, upload.FileName);
@@ -37,9 +40,15 @@ public sealed class FileAttachmentStore(IOptions<AttachmentStorageOptions> optio
         }
         catch
         {
-            try { if (created) Delete(key); }
+            try
+            {
+                if (created)
+                    Delete(key);
+            }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            { logger.LogWarning("Attachment cleanup will be retried by reconciliation."); }
+            {
+                logger.LogWarning("Attachment cleanup will be retried by reconciliation.");
+            }
             throw;
         }
     }

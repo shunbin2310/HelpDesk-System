@@ -25,9 +25,17 @@ public sealed class DatabaseConstraintsTests
         {
             var user = await AddUser(db);
             var roleIds = await db.Roles.OrderBy(x => x.Id).Select(x => x.Id).ToArrayAsync();
-            db.UserRoles.Add(new() { UserId = user.Id, RoleId = roleIds[0] });
+            db.UserRoles.Add(new()
+            {
+                UserId = user.Id,
+                RoleId = roleIds[0]
+            });
             await db.SaveChangesAsync();
-            db.UserRoles.Add(new() { UserId = user.Id, RoleId = roleIds[1] });
+            db.UserRoles.Add(new()
+            {
+                UserId = user.Id,
+                RoleId = roleIds[1]
+            });
             await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
             db.ChangeTracker.Clear();
 
@@ -52,15 +60,21 @@ public sealed class DatabaseConstraintsTests
             var second = await AddTicket(db, user.Id);
             var message = new TicketMessage
             {
-                TicketId = first.Id, AuthorUserId = user.Id,
-                MessageType = TicketMessageType.InternalNote, Body = "Internal test note"
+                TicketId = first.Id,
+                AuthorUserId = user.Id,
+                MessageType = TicketMessageType.InternalNote,
+                Body = "Internal test note"
             };
             db.TicketMessages.Add(message);
             await db.SaveChangesAsync();
             db.Attachments.Add(new()
             {
-                TicketId = second.Id, TicketMessageId = message.Id, UploadedByUserId = user.Id,
-                OriginalFileName = "test.txt", StorageKey = Guid.NewGuid().ToString("N"), ContentType = "text/plain"
+                TicketId = second.Id,
+                TicketMessageId = message.Id,
+                UploadedByUserId = user.Id,
+                OriginalFileName = "test.txt",
+                StorageKey = Guid.NewGuid().ToString("N"),
+                ContentType = "text/plain"
             });
             await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
             db.ChangeTracker.Clear();
@@ -90,18 +104,26 @@ public sealed class DatabaseConstraintsTests
             await db.SaveChangesAsync();
             var firstOpen = new WorkflowStepTemplate
             {
-                ProcessTemplateId = first.Id, Code = TicketWorkflow.Open, Name = "Open", IsInitial = true
+                ProcessTemplateId = first.Id,
+                Code = TicketWorkflow.Open,
+                Name = "Open",
+                IsInitial = true
             };
             var secondProgress = new WorkflowStepTemplate
             {
-                ProcessTemplateId = second.Id, Code = TicketWorkflow.InProgress, Name = "In Progress"
+                ProcessTemplateId = second.Id,
+                Code = TicketWorkflow.InProgress,
+                Name = "In Progress"
             };
             db.AddRange(firstOpen, secondProgress);
             await db.SaveChangesAsync();
             db.Add(new WorkflowActionTemplate
             {
-                ProcessTemplateId = first.Id, FromStepTemplateId = firstOpen.Id,
-                ToStepTemplateId = secondProgress.Id, Code = TicketWorkflow.StartProcessing, Name = "Start"
+                ProcessTemplateId = first.Id,
+                FromStepTemplateId = firstOpen.Id,
+                ToStepTemplateId = secondProgress.Id,
+                Code = TicketWorkflow.StartProcessing,
+                Name = "Start"
             });
             await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
             db.ChangeTracker.Clear();
@@ -112,8 +134,10 @@ public sealed class DatabaseConstraintsTests
             await db.SaveChangesAsync();
             var secondStep = new WorkflowStepInstance
             {
-                ProcessInstanceId = secondInstance.Id, SourceStepTemplateId = secondProgress.Id,
-                Code = TicketWorkflow.InProgress, Name = "In Progress"
+                ProcessInstanceId = secondInstance.Id,
+                SourceStepTemplateId = secondProgress.Id,
+                Code = TicketWorkflow.InProgress,
+                Name = "In Progress"
             };
             db.Add(secondStep);
             await db.SaveChangesAsync();
@@ -123,8 +147,11 @@ public sealed class DatabaseConstraintsTests
 
             var ownStep = new WorkflowStepInstance
             {
-                ProcessInstanceId = firstInstance.Id, SourceStepTemplateId = firstOpen.Id,
-                Code = TicketWorkflow.Open, Name = "Open", IsInitial = true
+                ProcessInstanceId = firstInstance.Id,
+                SourceStepTemplateId = firstOpen.Id,
+                Code = TicketWorkflow.Open,
+                Name = "Open",
+                IsInitial = true
             };
             db.Add(ownStep);
             await db.SaveChangesAsync();
@@ -149,23 +176,31 @@ public sealed class DatabaseConstraintsTests
             var starts = DateTimeOffset.UtcNow;
             db.Delegations.Add(new()
             {
-                SourceUserId = first.Id, TargetUserId = second.Id, CreatedByUserId = first.Id,
-                StartsAtUtc = starts, EndsAtUtc = starts.AddHours(-1)
+                SourceUserId = first.Id,
+                TargetUserId = second.Id,
+                CreatedByUserId = first.Id,
+                StartsAtUtc = starts,
+                EndsAtUtc = starts.AddHours(-1)
             });
             await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
             db.ChangeTracker.Clear();
 
             var delegation = new Delegation
             {
-                SourceUserId = first.Id, TargetUserId = second.Id, CreatedByUserId = first.Id,
-                StartsAtUtc = starts, EndsAtUtc = starts.AddHours(1)
+                SourceUserId = first.Id,
+                TargetUserId = second.Id,
+                CreatedByUserId = first.Id,
+                StartsAtUtc = starts,
+                EndsAtUtc = starts.AddHours(1)
             };
             db.Add(delegation);
             await db.SaveChangesAsync();
             DelegationTicket Handoff() => new()
             {
-                DelegationId = delegation.Id, TicketId = ticket.Id,
-                OriginalAssigneeUserId = first.Id, DelegatedToUserId = second.Id
+                DelegationId = delegation.Id,
+                TicketId = ticket.Id,
+                OriginalAssigneeUserId = first.Id,
+                DelegatedToUserId = second.Id
             };
             db.Add(Handoff());
             await db.SaveChangesAsync();
@@ -178,8 +213,14 @@ public sealed class DatabaseConstraintsTests
     private static ApplicationUser NewUser()
     {
         var email = $"stage1-{Guid.NewGuid():N}@example.invalid";
-        return new() { Email = email, NormalizedEmail = email.ToUpperInvariant(),
-            UserName = email, NormalizedUserName = email.ToUpperInvariant(), FullName = "Stage 1 test" };
+        return new()
+        {
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            UserName = email,
+            NormalizedUserName = email.ToUpperInvariant(),
+            FullName = "Stage 1 test"
+        };
     }
 
     private static async Task<ApplicationUser> AddUser(HelpDeskDbContext db)
@@ -195,8 +236,10 @@ public sealed class DatabaseConstraintsTests
         var ticket = new Ticket
         {
             TicketNumber = $"TEST-{Guid.NewGuid():N}"[..32],
-            Title = "Stage 1 test", Description = "Constraint verification",
-            Category = TicketCategory.Network, RequestedByUserId = requester
+            Title = "Stage 1 test",
+            Description = "Constraint verification",
+            Category = TicketCategory.Network,
+            RequestedByUserId = requester
         };
         db.Add(ticket);
         await db.SaveChangesAsync();
@@ -205,13 +248,18 @@ public sealed class DatabaseConstraintsTests
 
     private static WorkflowProcessTemplate NewTemplate(int creator) => new()
     {
-        Code = $"TEST_{Guid.NewGuid():N}", Name = "Test workflow", EntityType = TicketWorkflow.EntityType,
+        Code = $"TEST_{Guid.NewGuid():N}",
+        Name = "Test workflow",
+        EntityType = TicketWorkflow.EntityType,
         CreatedByUserId = creator
     };
 
     private static WorkflowProcessInstance NewInstance(long ticketId, WorkflowProcessTemplate template) => new()
     {
-        TicketId = ticketId, ProcessTemplateId = template.Id,
-        TemplateCode = template.Code, TemplateName = template.Name, TemplateVersion = template.Version
+        TicketId = ticketId,
+        ProcessTemplateId = template.Id,
+        TemplateCode = template.Code,
+        TemplateName = template.Name,
+        TemplateVersion = template.Version
     };
 }

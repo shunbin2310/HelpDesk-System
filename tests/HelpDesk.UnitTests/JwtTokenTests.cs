@@ -25,9 +25,11 @@ public sealed class JwtTokenTests
         Assert.Equal(ApplicationRoles.Employee, Assert.Single(principal.FindAll("role")).Value);
         Assert.True(principal.IsInRole(ApplicationRoles.Employee));
         Assert.InRange((result.ExpiresAtUtc - DateTimeOffset.UtcNow).TotalMinutes, 59, 61);
-        var wrongIssuer = options.ValidationParameters(); wrongIssuer.ValidIssuer = "another";
+        var wrongIssuer = options.ValidationParameters();
+        wrongIssuer.ValidIssuer = "another";
         Assert.Throws<SecurityTokenInvalidIssuerException>(() => handler.ValidateToken(result.AccessToken, wrongIssuer, out _));
-        var wrongAudience = options.ValidationParameters(); wrongAudience.ValidAudience = "another";
+        var wrongAudience = options.ValidationParameters();
+        wrongAudience.ValidAudience = "another";
         Assert.Throws<SecurityTokenInvalidAudienceException>(() => handler.ValidateToken(result.AccessToken, wrongAudience, out _));
         Assert.ThrowsAny<SecurityTokenException>(() => handler.ValidateToken(result.AccessToken, Settings().ValidationParameters(), out _));
     }

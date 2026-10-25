@@ -5,8 +5,20 @@ namespace HelpDesk.Domain.Entities.Workflows;
 
 public sealed class WorkflowActionerTemplate : Entity
 {
-    public long ActionTemplateId { get; set; }
-    public WorkflowActionerType ActionerType { get; set; }
-    public string? ActionerRole { get; set; }
-    public int? ActionerUserId { get; set; }
+    public long ActionTemplateId
+    {
+        get; set;
+    }
+    public WorkflowActionerType ActionerType
+    {
+        get; set;
+    }
+    public string? ActionerRole
+    {
+        get; set;
+    }
+    public int? ActionerUserId
+    {
+        get; set;
+    }
 }

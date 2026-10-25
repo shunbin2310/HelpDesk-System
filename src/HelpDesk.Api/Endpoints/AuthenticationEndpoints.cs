@@ -27,6 +27,9 @@ public static class AuthenticationEndpoints
             .RequireAuthorization().RequireRateLimiting("login");
     }
 
-    internal static IResult ToResult(UserAccountResult result) => result.Succeeded ? Results.Ok(new { result.UserId })
+    internal static IResult ToResult(UserAccountResult result) => result.Succeeded ? Results.Ok(new
+    {
+        result.UserId
+    })
         : Results.ValidationProblem(new Dictionary<string, string[]> { ["account"] = result.Errors.ToArray() });
 }

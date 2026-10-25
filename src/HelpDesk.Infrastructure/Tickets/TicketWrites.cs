@@ -12,23 +12,32 @@ internal static class TicketWrites
         try
         {
             var result = await operation();
-            if (result.Status == TicketResultStatus.Success) await transaction.CommitAsync(ct);
-            else { await transaction.RollbackAsync(ct); db.ChangeTracker.Clear(); }
+            if (result.Status == TicketResultStatus.Success)
+                await transaction.CommitAsync(ct);
+            else
+            {
+                await transaction.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+            }
             return result;
         }
         catch (AttachmentValidationException exception)
         {
-            await transaction.RollbackAsync(CancellationToken.None); db.ChangeTracker.Clear();
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
             return new(TicketResultStatus.Invalid, Error: exception.Message);
         }
         catch (DbUpdateConcurrencyException)
         {
-            await transaction.RollbackAsync(CancellationToken.None); db.ChangeTracker.Clear();
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
             return new(TicketResultStatus.Conflict, Error: "This Ticket changed. Refresh and try again.");
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None); db.ChangeTracker.Clear(); throw;
+            await transaction.RollbackAsync(CancellationToken.None);
+            db.ChangeTracker.Clear();
+            throw;
         }
     }
 }

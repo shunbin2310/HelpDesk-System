@@ -23,47 +23,67 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
                 return Failed(WorkflowResultStatus.Conflict, "This Ticket already has a workflow.");
             var template = await db.WorkflowProcessTemplates.AsNoTracking().SingleOrDefaultAsync(
                 x => x.EntityType == TicketWorkflow.EntityType && x.IsPublished && x.IsActive, cancellationToken);
-            if (template is null) return Failed(WorkflowResultStatus.Invalid, "No active published Ticket workflow is configured.");
+            if (template is null)
+                return Failed(WorkflowResultStatus.Invalid, "No active published Ticket workflow is configured.");
             var steps = await db.WorkflowStepTemplates.AsNoTracking().Where(x => x.ProcessTemplateId == template.Id).ToListAsync(cancellationToken);
             var actions = await db.WorkflowActionTemplates.AsNoTracking().Where(x => x.ProcessTemplateId == template.Id).ToListAsync(cancellationToken);
             var ids = actions.Select(x => x.Id).ToArray();
             var actioners = await db.WorkflowActionerTemplates.AsNoTracking().Where(x => ids.Contains(x.ActionTemplateId)).ToListAsync(cancellationToken);
             var error = TicketWorkflowPolicy.ValidateTemplate(steps, actions, actioners);
-            if (error is not null) return Failed(WorkflowResultStatus.Invalid, error);
+            if (error is not null)
+                return Failed(WorkflowResultStatus.Invalid, error);
 
             var process = new WorkflowProcessInstance
             {
-                TicketId = ticketId, ProcessTemplateId = template.Id, TemplateCode = template.Code,
-                TemplateName = template.Name, TemplateVersion = template.Version
+                TicketId = ticketId,
+                ProcessTemplateId = template.Id,
+                TemplateCode = template.Code,
+                TemplateName = template.Name,
+                TemplateVersion = template.Version
             };
             db.WorkflowProcessInstances.Add(process);
             await db.SaveChangesAsync(cancellationToken);
             var copiedSteps = steps.ToDictionary(x => x.Id, x => new WorkflowStepInstance
             {
-                ProcessInstanceId = process.Id, SourceStepTemplateId = x.Id, Code = x.Code, Name = x.Name,
-                DisplayOrder = x.DisplayOrder, IsInitial = x.IsInitial, IsTerminal = x.IsTerminal
+                ProcessInstanceId = process.Id,
+                SourceStepTemplateId = x.Id,
+                Code = x.Code,
+                Name = x.Name,
+                DisplayOrder = x.DisplayOrder,
+                IsInitial = x.IsInitial,
+                IsTerminal = x.IsTerminal
             });
             db.WorkflowStepInstances.AddRange(copiedSteps.Values);
             await db.SaveChangesAsync(cancellationToken);
             var copiedActions = actions.ToDictionary(x => x.Id, x => new WorkflowActionInstance
             {
-                ProcessInstanceId = process.Id, SourceActionTemplateId = x.Id, Code = x.Code, Name = x.Name,
-                FromStepInstanceId = copiedSteps[x.FromStepTemplateId].Id, ToStepInstanceId = copiedSteps[x.ToStepTemplateId].Id,
+                ProcessInstanceId = process.Id,
+                SourceActionTemplateId = x.Id,
+                Code = x.Code,
+                Name = x.Name,
+                FromStepInstanceId = copiedSteps[x.FromStepTemplateId].Id,
+                ToStepInstanceId = copiedSteps[x.ToStepTemplateId].Id,
                 RequiresComment = x.RequiresComment
             });
             db.WorkflowActionInstances.AddRange(copiedActions.Values);
             await db.SaveChangesAsync(cancellationToken);
             db.WorkflowActionerInstances.AddRange(actioners.Select(x => new WorkflowActionerInstance
             {
-                ActionInstanceId = copiedActions[x.ActionTemplateId].Id, SourceActionerTemplateId = x.Id,
-                ActionerType = x.ActionerType, ActionerRole = x.ActionerRole,
+                ActionInstanceId = copiedActions[x.ActionTemplateId].Id,
+                SourceActionerTemplateId = x.Id,
+                ActionerType = x.ActionerType,
+                ActionerRole = x.ActionerRole,
                 ActionerUserId = x.ActionerType == WorkflowActionerType.Requester ? ticket.RequestedByUserId : x.ActionerUserId
             }));
             process.CurrentStepInstanceId = copiedSteps[steps.Single(x => x.IsInitial).Id].Id;
             db.WorkflowHistory.Add(new WorkflowHistory
             {
-                ProcessInstanceId = process.Id, ToStepCode = TicketWorkflow.Open, ActionCode = "START",
-                ActionByUserId = actor.Id, ActionByNameSnapshot = actor.FullName, ActionAtUtc = process.StartedAtUtc
+                ProcessInstanceId = process.Id,
+                ToStepCode = TicketWorkflow.Open,
+                ActionCode = "START",
+                ActionByUserId = actor.Id,
+                ActionByNameSnapshot = actor.FullName,
+                ActionAtUtc = process.StartedAtUtc
             });
             await db.SaveChangesAsync(cancellationToken);
             return new(WorkflowResultStatus.Success, await SnapshotAsync(ticket, process, actor, cancellationToken));
@@ -91,7 +111,8 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
                 || request.RowVersion is not { Length: 8 } || request.Comment?.Length > 4000)
                 return Failed(WorkflowResultStatus.Invalid, "Provide an action code and an 8-byte workflow row version. Comments must be at most 4000 characters.");
             var process = await db.WorkflowProcessInstances.SingleOrDefaultAsync(x => x.TicketId == ticketId, cancellationToken);
-            if (process is null) return Failed(WorkflowResultStatus.NotFound, "Ticket workflow was not found.");
+            if (process is null)
+                return Failed(WorkflowResultStatus.NotFound, "Ticket workflow was not found.");
             await db.Entry(process).ReloadAsync(cancellationToken);
             if (!process.RowVersion.SequenceEqual(request.RowVersion))
                 return Failed(WorkflowResultStatus.Conflict, "The workflow changed. Refresh before submitting another action.");
@@ -101,7 +122,8 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
             var code = request.ActionCode.Trim().ToUpperInvariant();
             var action = await db.WorkflowActionInstances.AsNoTracking().SingleOrDefaultAsync(
                 x => x.ProcessInstanceId == process.Id && x.FromStepInstanceId == from.Id && x.Code == code, cancellationToken);
-            if (action is null) return Failed(WorkflowResultStatus.Conflict, "This action is not available from the current step.");
+            if (action is null)
+                return Failed(WorkflowResultStatus.Conflict, "This action is not available from the current step.");
             var to = await db.WorkflowStepInstances.AsNoTracking().SingleAsync(x => x.Id == action.ToStepInstanceId, cancellationToken);
             if (!TicketWorkflowPolicy.IsTransition(from.Code, action.Code, to.Code))
                 return Failed(WorkflowResultStatus.Invalid, "The configured action violates Ticket state rules.");
@@ -109,7 +131,8 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
             if (!TicketWorkflowPolicy.CanExecute(ticket, actor.Id, actor.Role, code, actioners))
                 return Failed(WorkflowResultStatus.Forbidden, "You cannot perform this Ticket action.");
             var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
-            if (TicketWorkflowPolicy.RequiresComment(code, action.RequiresComment) && comment is null) return Failed(WorkflowResultStatus.Invalid, "A comment is required for this action.");
+            if (TicketWorkflowPolicy.RequiresComment(code, action.RequiresComment) && comment is null)
+                return Failed(WorkflowResultStatus.Invalid, "A comment is required for this action.");
             var now = DateTimeOffset.UtcNow;
             process.CurrentStepInstanceId = to.Id;
             process.Status = to.Code == TicketWorkflow.Closed ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running;
@@ -117,8 +140,15 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
             ticket.UpdatedAtUtc = now;
             db.WorkflowHistory.Add(new WorkflowHistory
             {
-                ProcessInstanceId = process.Id, ActionInstanceId = action.Id, FromStepCode = from.Code, ToStepCode = to.Code,
-                ActionCode = code, ActionByUserId = actor.Id, ActionByNameSnapshot = actor.FullName, Comment = comment, ActionAtUtc = now
+                ProcessInstanceId = process.Id,
+                ActionInstanceId = action.Id,
+                FromStepCode = from.Code,
+                ToStepCode = to.Code,
+                ActionCode = code,
+                ActionByUserId = actor.Id,
+                ActionByNameSnapshot = actor.FullName,
+                Comment = comment,
+                ActionAtUtc = now
             });
             await db.SaveChangesAsync(cancellationToken);
             return new(WorkflowResultStatus.Success, await SnapshotAsync(ticket, process, actor, cancellationToken));
@@ -131,7 +161,8 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
             throw new InvalidOperationException("Save Ticket changes before calling the workflow engine.");
         var ticket = await db.Tickets.FromSqlInterpolated($"SELECT * FROM [Tickets] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {ticketId}")
             .SingleOrDefaultAsync(ct);
-        if (ticket is not null) await db.Entry(ticket).ReloadAsync(ct);
+        if (ticket is not null)
+            await db.Entry(ticket).ReloadAsync(ct);
         return ticket;
     }
 

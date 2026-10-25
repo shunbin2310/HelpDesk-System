@@ -27,8 +27,10 @@ public static class TicketWorkflowPolicy
     public static bool CanExecute(Ticket ticket, int userId, string role, string action,
         IEnumerable<WorkflowActionerInstance> actioners)
     {
-        if (action is not (TicketWorkflow.StartProcessing or TicketWorkflow.Resolve or TicketWorkflow.Close or TicketWorkflow.Reopen)) return false;
-        if (role == ApplicationRoles.SystemAdmin) return true;
+        if (action is not (TicketWorkflow.StartProcessing or TicketWorkflow.Resolve or TicketWorkflow.Close or TicketWorkflow.Reopen))
+            return false;
+        if (role == ApplicationRoles.SystemAdmin)
+            return true;
         // Template actioners can restrict permissions, but cannot widen Ticket business permissions.
         var permitted = action switch
         {
@@ -53,7 +55,8 @@ public static class TicketWorkflowPolicy
         if (steps.Count != 4 || !steps.Select(x => x.Code).Order().SequenceEqual(codes.Order())
             || steps.Any(x => x.IsInitial != (x.Code == TicketWorkflow.Open) || x.IsTerminal != (x.Code == TicketWorkflow.Closed)))
             return "A Ticket template requires Open, In Progress, Resolved and Closed, with Open initial and only Closed terminal.";
-        if (steps.Select(x => x.Id).Distinct().Count() != steps.Count) return "Step identifiers must be unique.";
+        if (steps.Select(x => x.Id).Distinct().Count() != steps.Count)
+            return "Step identifiers must be unique.";
         var byId = steps.ToDictionary(x => x.Id);
         string[] actionCodes = [TicketWorkflow.StartProcessing, TicketWorkflow.Resolve, TicketWorkflow.Close, TicketWorkflow.Reopen];
         if (actions.Count != 4 || !actions.Select(x => x.Code).Order().SequenceEqual(actionCodes.Order()))
@@ -62,9 +65,11 @@ public static class TicketWorkflowPolicy
         {
             if (!byId.TryGetValue(action.FromStepTemplateId, out var from) || !byId.TryGetValue(action.ToStepTemplateId, out var to)
                 || from.ProcessTemplateId != action.ProcessTemplateId || to.ProcessTemplateId != action.ProcessTemplateId
-                || !IsTransition(from.Code, action.Code, to.Code)) return "The template contains an invalid Ticket transition.";
+                || !IsTransition(from.Code, action.Code, to.Code))
+                return "The template contains an invalid Ticket transition.";
             var rules = actioners.Where(x => x.ActionTemplateId == action.Id).ToArray();
-            if (rules.Length == 0 || rules.Any(x => !ValidActioner(x))) return "Each action requires valid actioners.";
+            if (rules.Length == 0 || rules.Any(x => !ValidActioner(x)))
+                return "Each action requires valid actioners.";
         }
         return null;
     }

@@ -174,8 +174,10 @@ AssignmentVersion 是技术方案建议，用于防止代理任务覆盖较新�
 | --- | --- | --- |
 | Id | bigint IDENTITY，PK | 代理标识 |
 | SourceUserId / TargetUserId | int，FK Users | 原负责人 A / 代理人 B |
-| StartsAtUtc / EndsAtUtc | datetimeoffset(7) | 代理有效区间，建议为 [开始, 结束) |
-| Reason | nvarchar(1000) NULL | 代理原因；是否必填待确认 |
+| StartsAtUtc / EndsAtUtc | datetimeoffset(7) | 代理有效区间 [开始, 结束)；新安排由马来西亚开始 / 结束日期转换，结束为所选日期次日 00:00，开始选今天时为创建时刻 |
+| Reason | nvarchar(1000) NULL | 代理原因，可选，最多 1000 字符 |
+| StoppedAtUtc | datetimeoffset(7) NULL | 取消 / 提前结束时间；原 EndsAtUtc 不变 |
+| StoppedByUserId | int NULL，FK Users | 操作人；与停止时间成对填写 |
 | CreatedByUserId | int，FK Users | 设置代理的 Admin |
 | ActivatedAtUtc / CompletedAtUtc | datetimeoffset(7) NULL | 后台实际开始、完成处理的时间 |
 | CreatedAtUtc / UpdatedAtUtc | datetimeoffset(7) | 记录时间 |
@@ -183,7 +185,7 @@ AssignmentVersion 是技术方案建议，用于防止代理任务覆盖较新�
 
 约束：SourceUserId 不等于 TargetUserId；StartsAtUtc 小于 EndsAtUtc。A / B 必须为可用的 Support IT Staff，设置者必须为 Support Admin / System Admin。
 
-当前是否生效应结合开始、结束时间判断，不能只依赖某个后台任务是否已经更新标记。调度方案、重叠或链式代理、提前结束及人员停用的业务政策尚未决定。
+当前是否生效结合开始、结束及停止时间判断，不能只依赖后台任务是否已经更新标记。页面和 API 仅接收日期：开始不早于马来西亚今天，结束不早于开始，允许同一天；旧时间记录不改写。重叠 / 链式代理、取消 / 提前结束及人员停用的已实现政策见需求和实施计划的 Delegation 部分。
 
 ### 4.7 DelegationTickets
 
@@ -305,7 +307,7 @@ ActionInstance 是该 Ticket 的可用动作副本，WorkflowHistory 才是每�
 2. 当前负责人已不是 B，或 AssignmentVersion 表明存在后续安排：标记 SkippedReassigned，保留人工安排。
 3. 当前为 Open / In Progress / Resolved，且仍是本次代理分配：转回 A，保持原步骤，递增 AssignmentVersion，记录历史并标记 Returned。
 
-转回及处理结果在同一事务提交，支持任务重试而不重复转回。B 原有的工单没有本次 DelegationTickets 记录，因此不受影响。Source / Target 被停用或出现重叠代理时的策略待确认。
+转回及处理结果在同一事务提交，支持任务重试而不重复转回。B 原有的工单没有本次 DelegationTickets 记录，因此不受影响。Source / Target 停用或角色变化时按已确认规则暂停交接或归还，恢复后重试；重叠 / 链式代理在服务事务中禁止。
 
 ## 9. 索引与删除策略建议
 
@@ -334,11 +336,11 @@ SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAc
 
 ## 11. Migration 管理与启动更新
 
-参考公司项目的 EF Core 启动迁移流程，并结合 Project1 的开发生成、模型检查、开关和目标数据库校验。EF Core Migration 与 Snapshot 存放在 Infrastructure，Api 的 Program.cs 在服务启动前调用迁移服务。公司项目的数据库 Provider 及部署配置不直接沿用，Helpdesk 使用 SQL Server。
+参考公司项目的 EF Core 启动迁移流程，并结合 Project1 的开发生成、模型检查和目标数据库校验。EF Core Migration 与 Snapshot 存放在 Infrastructure，Api 的 Program.cs 在服务启动前调用迁移服务。公司项目的数据库 Provider 及部署配置不直接沿用，Helpdesk 使用 SQL Server。
 
 - 修改 Entity 后需显式生成、审核并提交 Migration，不依赖 API 启动自动生成文件。
-- `migrations has-pending-model-changes` 用于检查模型变化是否缺少对应文件；设计时和 CI 检查关闭启动迁移。
-- 启动迁移默认关闭，显式开启后检查 ExpectedDatabase、查询待执行 Migration，有待执行项才调用 MigrateAsync。
+- `migrations has-pending-model-changes` 用于检查模型变化是否缺少对应文件；设计时 Factory 仅创建 DbContext，不启动 API 或执行启动迁移。
+- 每次启动 API 都检查 ExpectedDatabase、查询待执行 Migration，有待执行项才调用 MigrateAsync，不再提供启动迁移开关。
 - 查询或执行失败时不继续初始化用户、模板、后台 Delegation 任务或 HTTP 服务。
 - 已应用的版本由 EF 的迁移历史跟踪；部署携带已有 Migration，不在服务器重新生成源码。
 - 首次创建开发数据库、已有数据库的升级，以及多实例发布时的权限与协调方式，在实现和部署阶段分别验证。
@@ -357,3 +359,7 @@ SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAc
 该配置只针对本地 Windows 开发，不预设 Docker 或生产环境使用相同连接方式。已应用 InitialCreate、AddWorkflowInstanceSequence 和 FixCurrentStepOwnership。所有外键均启用并受信任；单角色唯一索引已验证。11 项单元测试、5 项 SQL Server 集成测试通过，无跳过；测试数据已回滚或清理，业务用户、工单和流程实例均为 0。
 
 阶段 5 简化版复用 Attachment 表，无 Migration；TicketMessages 及关联字段仅作兼容保留。文件存私有目录，随机 StorageKey，单批最多 5 个、单文件 10 MiB；附件元数据和工单写入同一事务。失败后只清理未被数据库引用的文件；后台每小时核对超过 24 小时的孤立文件，查询失败不删除，已提交的旧消息附件引用同样保留。
+
+Delegation 阶段复用既有 Delegations、DelegationTickets、TicketHistories 结构，无 Migration。SQL Server 事务级 HelpDesk.DelegationAssignments 应用锁协调代理创建、自动处理、人工分配和账号管理，先获取应用锁再获取 Ticket 行锁；流程动作只持有 Ticket 行锁。归还检查当前负责人及 DelegatedAssignmentVersion，Closed / 人工转派分别记录 SkippedClosed / SkippedReassigned。后台异常回滚重试，CompletedAtUtc 只在本次待归还记录全部处理后填写。
+
+取消 / 提前结束使用 AddDelegationStopAudit 增量 Migration（20261025083228），仅新增可空审计列、操作人索引 / FK 和 CK_Delegations_StopAudit 成对填写约束。旧数据全部为 NULL。Cancelled / EndedEarly 为接口计算状态，不增加状态字符串列。有效截止时间为 StoppedAtUtc ?? EndsAtUtc；停止后立即退出分配路由，未完成归还仍由后台处理。后台归还不覆盖原始停止操作人 / 时间，重复停止幂等，正常完成不能再取消。

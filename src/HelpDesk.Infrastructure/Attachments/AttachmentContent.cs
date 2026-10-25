@@ -11,11 +11,19 @@ public static class AttachmentContent
 {
     private static readonly IReadOnlyDictionary<string, string> Types = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".gif"] = "image/gif",
-        [".webp"] = "image/webp", [".bmp"] = "image/bmp", [".pdf"] = "application/pdf",
-        [".doc"] = "application/msword", [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        [".xls"] = "application/vnd.ms-excel", [".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        [".txt"] = "text/plain", [".log"] = "text/plain"
+        [".png"] = "image/png",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".gif"] = "image/gif",
+        [".webp"] = "image/webp",
+        [".bmp"] = "image/bmp",
+        [".pdf"] = "application/pdf",
+        [".doc"] = "application/msword",
+        [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        [".xls"] = "application/vnd.ms-excel",
+        [".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        [".txt"] = "text/plain",
+        [".log"] = "text/plain"
     };
 
     public static string ValidateName(string name, long length)
@@ -32,14 +40,18 @@ public static class AttachmentContent
 
     public static void ValidateBatch(IReadOnlyList<AttachmentUpload> uploads)
     {
-        if (uploads.Count > AttachmentLimits.MaxFiles) throw new AttachmentValidationException("Upload at most 5 attachments per submission.");
-        foreach (var file in uploads) ValidateName(file.FileName, file.Length);
+        if (uploads.Count > AttachmentLimits.MaxFiles)
+            throw new AttachmentValidationException("Upload at most 5 attachments per submission.");
+        foreach (var file in uploads)
+            ValidateName(file.FileName, file.Length);
     }
 
     public static void Validate(Stream stream, string fileName)
     {
         Span<byte> header = stackalloc byte[16];
-        stream.Position = 0; var count = stream.Read(header); header = header[..count];
+        stream.Position = 0;
+        var count = stream.Read(header);
+        header = header[..count];
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         var valid = extension switch
         {
@@ -54,7 +66,8 @@ public static class AttachmentContent
             ".txt" or ".log" => TextFile(stream),
             _ => false
         };
-        if (!valid) throw new AttachmentValidationException("The attachment content does not match its file type, or the file is malformed.");
+        if (!valid)
+            throw new AttachmentValidationException("The attachment content does not match its file type, or the file is malformed.");
     }
 
     private static bool OfficePackage(Stream stream, string extension)
@@ -63,19 +76,27 @@ public static class AttachmentContent
         {
             stream.Position = 0;
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-            if (zip.Entries.Count > 2000) return false;
+            if (zip.Entries.Count > 2000)
+                return false;
             long expanded = 0;
             foreach (var entry in zip.Entries)
             {
-                if (entry.Length > 100 * 1024 * 1024 - expanded) return false;
+                if (entry.Length > 100 * 1024 * 1024 - expanded)
+                    return false;
                 expanded += entry.Length;
-                if (entry.FullName.Contains("..", StringComparison.Ordinal)) return false;
+                if (entry.FullName.Contains("..", StringComparison.Ordinal))
+                    return false;
             }
             var types = zip.GetEntry("[Content_Types].xml");
             var part = extension == ".docx" ? "word/document.xml" : "xl/workbook.xml";
-            if (types is null || types.Length > 65536 || zip.GetEntry(part) is null) return false;
+            if (types is null || types.Length > 65536 || zip.GetEntry(part) is null)
+                return false;
             using var xml = XmlReader.Create(types.Open(), new XmlReaderSettings
-                { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = 65536 });
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersInDocument = 65536
+            });
             var document = XDocument.Load(xml);
             var expected = extension == ".docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
                 : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
@@ -92,10 +113,12 @@ public static class AttachmentContent
         {
             stream.Position = 0;
             using var reader = new StreamReader(stream, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: true, leaveOpen: true);
-            var buffer = new char[4096]; int count;
+            var buffer = new char[4096];
+            int count;
             while ((count = reader.Read(buffer)) > 0)
                 if (buffer.AsSpan(0, count).ContainsAnyInRange('\0', '\b') || buffer.AsSpan(0, count).ContainsAnyInRange('\x0e', '\x1f')
-                    || buffer.AsSpan(0, count).Contains('\x0b') || buffer.AsSpan(0, count).Contains('\x0c')) return false;
+                    || buffer.AsSpan(0, count).Contains('\x0b') || buffer.AsSpan(0, count).Contains('\x0c'))
+                    return false;
             return true;
         }
         catch (DecoderFallbackException) { return false; }

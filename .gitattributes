@@ -1,0 +1,4 @@
+/src/HelpDesk.Web/** text eol=lf
+/src/**/*.cs text eol=crlf
+/tests/**/*.cs text eol=crlf
+/.editorconfig text eol=lf

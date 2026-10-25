@@ -14,20 +14,25 @@ internal static class WorkflowTransactions
         await using var owned = outer is null ? await db.Database.BeginTransactionAsync(ct) : null;
         var transaction = outer ?? owned!;
         var savepoint = Guid.NewGuid().ToString("N");
-        if (outer is not null) await transaction.CreateSavepointAsync(savepoint, ct);
+        if (outer is not null)
+            await transaction.CreateSavepointAsync(savepoint, ct);
 
         async Task Rollback()
         {
-            if (outer is null) await transaction.RollbackAsync(CancellationToken.None);
-            else await transaction.RollbackToSavepointAsync(savepoint, CancellationToken.None);
+            if (outer is null)
+                await transaction.RollbackAsync(CancellationToken.None);
+            else
+                await transaction.RollbackToSavepointAsync(savepoint, CancellationToken.None);
             db.ChangeTracker.Clear();
         }
 
         try
         {
             var result = await operation();
-            if (result.Status != WorkflowResultStatus.Success) await Rollback();
-            else if (owned is not null) await owned.CommitAsync(ct);
+            if (result.Status != WorkflowResultStatus.Success)
+                await Rollback();
+            else if (owned is not null)
+                await owned.CommitAsync(ct);
             return result;
         }
         catch (DbUpdateConcurrencyException)

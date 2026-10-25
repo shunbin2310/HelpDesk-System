@@ -50,7 +50,7 @@
 9. GitHub Actions + Docker 部署与发布（环境待确认）
 ```
 
-每个功能阶段都包含对应 API、前端界面和必要测试。先完成核心 Ticket 闭环，再完成模板管理和自动代理；第一版功能完成需到阶段 8。
+每个功能阶段都包含对应 API、前端界面和必要测试。先完成核心 Ticket 闭环及自动代理；模板编辑器按用户确认暂缓，接着做阶段 8 整体验收。
 
 ## 3. 阶段 0：基础项目骨架
 
@@ -78,7 +78,7 @@
 - [x] 添加 SQL Server Provider、HelpDeskDbContext、配置映射和依赖注入。
 - [x] 落实唯一 Email、单工单单流程实例、UTC、rowversion 和同流程复合外键。
 - [x] 生成并审核完整 Migration、Designer、Snapshot 文件，应用到本机开发库；文件保留供后续 Git 提交，未代替用户执行 Commit。
-- [x] 添加默认关闭、显式开启的启动迁移服务；检查目标数据库，失败阻止启动，无待执行项时跳过。
+- [x] 添加启动迁移服务；每次启动检查目标数据库与待执行 Migration，失败阻止启动，无待执行项时跳过更新。
 - [x] 添加仓库级 dotnet-ef 工具清单及设计时 Factory，模型一致性检查通过。
 - [x] 更新 README 的连接、启动迁移、生成 Migration 和测试步骤。
 
@@ -224,6 +224,8 @@ Employee Close → Closed
 
 ## 9. 阶段 6：Workflow Template 管理
 
+状态：2026-10-25 暂缓。按用户确认，先完成 Delegation；第一版保留固定四状态及既有默认模板初始化。
+
 目标：System Admin 可以管理流程定义及版本，已有 Ticket 仍使用自己的流程副本。
 
 实现前确认：第一版允许编辑哪些步骤、动作、操作人和说明要求；新增状态是否开放。没有额外决定时，保持已确认的四状态业务语义。
@@ -244,21 +246,31 @@ Employee Close → Closed
 
 目标：休假或临时不在时，工单可以自动交接，并在代理结束时按已确认规则归还。
 
-实现前确认：代理重叠或链式代理、取消或提前结束、代理双方停用、后台调度延迟及恢复的处理。
+状态：2026-10-25 已完成。
+
+确认规则：同一 Staff 同时只能参与一条代理，禁止重叠和链式代理；本轮增加 Scheduled 取消和有效期间提前结束。账号异常时保留当前安排并提示 Admin，恢复有效 Staff 身份后重试；人工重新分配保留。开始 / 结束仅选马来西亚日期，移除 Start now；开始不早于今天，今天立即生效，未来日期 00:00 生效；结束不早于开始，允许同一天、包含结束当天，次日 00:00 到期。API 校验并转换为 UTC，沿用现有存储和后台处理。
 
 工作内容：
 
-- [ ] 实现 Support Admin / System Admin 设置 A、B、开始及结束时间的页面和 API。
-- [ ] 生效时交接 A 的全部 Open / In Progress，保持原状态。
-- [ ] 有效期间，新分配给 A 的 Ticket 实际路由给 B。
-- [ ] 逐 Ticket 写入 DelegationTickets，区分本次代理工单与 B 原有工单。
-- [ ] 到期转回本次代理的 Open / In Progress / Resolved，保持原状态；Closed 不转回。
-- [ ] 保留 Admin 后来作出的人工重新分配，例如 A → B 后再转给 C。
-- [ ] 实现后台开始、到期处理及失败恢复；同一任务重试不得重复转派或重复记录结果。
-- [ ] 保证交接、转回、历史和处理标记在事务内保持一致，并处理与人工分配的并发。
-- [ ] 验证交接后 A 无权查看，转回后 B 无权查看；Resolved 转回 A 后 Reopen 由 A 继续处理。
+- [x] 实现 Support Admin / System Admin 设置 A、B、开始及结束日期的页面和 API，前后端校验日期范围。
+- [x] 生效时交接 A 的全部 Open / In Progress，保持原状态。
+- [x] 有效期间，新分配给 A 的 Ticket 实际路由给 B。
+- [x] 逐 Ticket 写入 DelegationTickets，区分本次代理工单与 B 原有工单。
+- [x] 到期转回本次代理的 Open / In Progress / Resolved，保持原状态；Closed 不转回。
+- [x] 保留 Admin 后来作出的人工重新分配，例如 A → B 后再转给 C。
+- [x] 实现后台开始、到期处理及失败恢复；同一任务重试不得重复转派或重复记录结果。
+- [x] 保证交接、转回、历史和处理标记在事务内保持一致，并处理与人工分配的并发。
+- [x] 验证交接后 A 无权查看，转回后 B 无权查看；Resolved 转回 A 后 Reopen 由 A 继续处理。
 
 完成标准：现有工单、新分配工单、Resolved 到期转回、Closed 保留、人工转派、重复任务等场景均通过测试。
+
+实施结果：新增 Application/Delegations 契约、Infrastructure/Delegations 服务及后台处理、Api/DelegationEndpoints 和 Vue Delegations 页面。分配入口共用数据库应用锁，逐 Ticket 加行锁复核；交接、归还、台账和历史原子写入。后台启动及每 30 秒执行，停机后重启恢复；完整错过的空安排不追溯交接。
+
+验证：66 项单元测试、25 项 SQL Server 集成测试全部通过，Vue 构建和 EF 模型一致性检查通过。浏览器已验证 Support Admin 创建代理、即时交接、真实后台到期归还、工单明细及 375px 无横向溢出。没有新增表、Migration 或依赖。测试使用独立数据库；账号和既有工单不受影响。
+
+取消 / 提前结束补充：已加入两种 Admin 的 Cancel / End early 确认弹窗及 API，使用代理 rowVersion 和数据库锁处理时序、并发和重复操作；提前结束即时停止分配路由。原计划结束时间保留，新增可空 StoppedAtUtc / StoppedByUserId 审计字段及 AddDelegationStopAudit Migration。账号异常时延后归还，后台恢复后重试；Closed 和后续人工转派保留。
+
+补充验证：66 项单元测试、31 项 SQL 集成测试通过；覆盖取消权限和边界、提前归还、状态 / 人工转派保留、停用恢复、幂等并发、回滚和旧数据库升级兼容。Migration 仅在独立测试库验证，实际开发库待用户显式应用。
 
 ## 11. 阶段 8：整体验收
 
@@ -269,7 +281,7 @@ Employee Close → Closed
 - [ ] 验证并发操作、重复提交、账号停用和模板版本变化。
 - [ ] 完成 Domain / Application 的业务规则测试，以及 API、数据库和核心前端流程的集成测试。
 - [ ] 在专用 SQL Server 测试环境验证 Migration、外键、唯一性及并发标记。
-- [ ] 验证启动迁移默认关闭、无待执行项时跳过、目标数据库错误时拒绝执行，以及迁移失败时阻止启动；执行模型与 Migration Snapshot 一致性检查。
+- [ ] 验证每次启动检查迁移、无待执行项时跳过更新、目标数据库错误时拒绝执行，以及迁移失败时阻止启动；执行模型与 Migration Snapshot 一致性检查。
 - [ ] 验证前后端构建，以及全新环境安装依赖和初始化数据库的步骤。
 - [ ] 整理错误提示、表单校验、空列表、加载状态和小屏基本可用性。
 - [ ] 更新 README、配置示例和开发运行说明，记录已知限制。
@@ -286,7 +298,7 @@ Employee Close → Closed
 - [ ] 确认镜像仓库、部署触发方式、反向代理和目标环境，并实现对应 CD 步骤。
 - [ ] 配置生产前端与 API 路由；开发 Vite 代理不能直接作为生产部署方案。
 - [ ] 配置生产凭据、首个管理员、附件持久化、日志及后台代理任务运行方式。
-- [ ] 按第 15 节配置启动迁移的显式开关、预期数据库、命令超时和数据库权限，并确定备份、恢复和发布失败后的处理。
+- [ ] 按第 15 节配置预期数据库、迁移命令超时和数据库权限，并确定备份、恢复和发布失败后的处理。
 - [ ] 在 GitHub Actions 中加入 `migrations has-pending-model-changes`，避免模型变化缺少 Migration 文件却继续发布。
 - [ ] 在测试环境验证构建、部署、重启、文件保留和到期代理恢复。
 - [ ] 完成发布后的登录、工单及代理检查。
@@ -301,7 +313,7 @@ Employee Close → Closed
 4. 用中文交付：修改文件、关键变化、可测试步骤、验证结果和剩余限制。
 5. 完成验收后更新本计划的状态及相关文档，不提前勾选未完成项目。
 
-下一步为阶段 2：确认凭据和首个管理员初始化细节，再实现登录、JWT、CurrentUserContext 及用户管理 API / 页面。阶段 1 数据基础已经完成。
+当前已完成账号、固定 Workflow、Ticket、提交附件及 Delegation。下一步为阶段 8 整体验收；阶段 6 模板编辑器暂缓，部署细节仍待确认。
 
 ## 14. Project1 功能参考清单
 
@@ -316,8 +328,8 @@ Employee Close → Closed
 | 用户管理与会话失效 | `backend/Project1.Api/Services/Users/UserManagementService.cs` | 参考账号创建、停用、角色调整后更新 SecurityStamp 的方式；保持 Helpdesk 单角色规则 |
 | 前端登录与请求 | `frontend/src/stores/auth.ts`；`services/authService.ts`、`authSession.ts`、`apiClient.ts`；`router/index.ts` | 参考登录状态、Authorization Header、统一错误和路由权限；角色、存储键及 API 路径按 Helpdesk 调整 |
 | Workflow | `backend/Project1.Api/Entities/Workflows/`；`Services/Workflows/WorkflowEngine.cs`；`Services/WorkflowTemplates/WorkflowTemplateService.cs` | 参考 Template / Instance / History，支持 CurrentAssignee 和 Reopen 循环 |
-| EF Core 启动迁移 | `backend/Project1.Api/Data/StartupDatabaseMigration.cs`；`Program.cs` | 参考开关、目标数据库检查、GetPendingMigrationsAsync、MigrateAsync 和失败阻止启动；适配 Infrastructure 分层 |
-| Migration 模型检查与测试 | `.github/workflows/ci.yml`；`tests/Project1.Api.Tests/StartupDatabaseMigrationTests.cs`；`tests/Project1.Migrations.Tests/` | 参考缺少 Migration 的检查、迁移服务测试和 SQL Server 集成测试，生成与检查阶段关闭启动迁移 |
+| EF Core 启动迁移 | `backend/Project1.Api/Data/StartupDatabaseMigration.cs`；`Program.cs` | 参考目标数据库检查、GetPendingMigrationsAsync、MigrateAsync 和失败阻止启动；适配 Infrastructure 分层，每次启动检查 |
+| Migration 模型检查与测试 | `.github/workflows/ci.yml`；`tests/Project1.Api.Tests/StartupDatabaseMigrationTests.cs`；`tests/Project1.Migrations.Tests/` | 参考缺少 Migration 的检查、迁移服务测试和 SQL Server 集成测试，生成与检查通过设计时 Factory，不启动 API |
 | 测试场景 | `tests/Project1.Api.Tests/Authentication/`；`frontend/src/services/__tests__/apiClient.spec.ts`；`stores/__tests__/auth.spec.ts` | 参考断言场景，编写针对 Helpdesk 单角色、Token 及工单权限的测试 |
 
 说明：表中省略前缀的 Services / Controllers 路径均位于 `backend/Project1.Api`；省略前缀的前端路径位于 `frontend/src`。
@@ -332,9 +344,9 @@ Employee Close → Closed
 
 ## 15. EF Core Migration 与启动更新
 
-用户补充的参考方向：参考公司项目 API 启动时查询并应用 Migration 的方式，结合 Project1 的开关、目标数据库校验和 CI 模型检查。当前已核对两边代码；Helpdesk 已接入 DbContext 和启动迁移服务并完成阶段 1 验证。
+用户补充的参考方向：参考公司项目 API 启动时查询并应用 Migration 的方式，结合 Project1 的目标数据库校验和 CI 模型检查。当前已核对两边代码；Helpdesk 已接入 DbContext 和启动迁移服务并完成阶段 1 验证。
 
-公司项目在 `src/AHAM.CCIF.Api/Program.cs` 的 Build 之后直接调用 GetPendingMigrationsAsync，有待执行项才调用 MigrateAsync，失败阻止后续启动。Project1 把这部分抽成独立服务，并提供显式开关。Helpdesk 采用便于分层和测试的服务形式，保留默认关闭、部署显式开启的计划；不会因为参考公司实现而自动改为每次启动都迁移。
+公司项目在 `src/AHAM.CCIF.Api/Program.cs` 的 Build 之后直接调用 GetPendingMigrationsAsync，有待执行项才调用 MigrateAsync，失败阻止后续启动。Project1 把这部分抽成独立服务，并提供显式开关。Helpdesk 保留便于分层和测试的服务形式，按 2026-10-25 的决定移除开关，每次启动都检查并应用待执行 Migration。
 
 ### 15.1 区分三个步骤
 
@@ -342,19 +354,15 @@ Employee Close → Closed
 | --- | --- | --- |
 | 开发时生成 Migration | Entity / EF 模型变化后，通过 EF CLI 生成 Migration、Designer 和 Snapshot，审核后提交 | 生成文件本身不更新数据库 |
 | 模型一致性检查 | `migrations has-pending-model-changes` 检查当前模型相对 Migration Snapshot 是否还有未记录的变化 | 不更新数据库，也不自动生成 Migration |
-| API 启动迁移 | 查询当前应用中已有、但目标数据库尚未应用的 Migration；有待执行项才调用 MigrateAsync | 开关开启且存在待执行项时更新数据库 |
+| API 启动迁移 | 每次启动查询当前应用中已有、但目标数据库尚未应用的 Migration；有待执行项才调用 MigrateAsync | 存在待执行项时更新数据库 |
 
 不能把“没有待应用 Migration”当作“模型一定没有漏写 Migration 文件”。模型一致性检查不等同于对目标数据库结构、手工修改或现有数据兼容性的完整验证。
 
-### 15.2 Helpdesk 的计划启动顺序
+### 15.2 Helpdesk 的启动顺序
 
 ```text
 加载配置、注册服务并 Build
           ↓
-检查 Database:MigrateOnStartup
-          ├── false → 不执行启动迁移，继续普通启动流程
-          └── true
-                ↓
         校验 ExpectedDatabase 和超时设置
                 ↓
         GetPendingMigrationsAsync
@@ -365,24 +373,24 @@ Employee Close → Closed
                      失败则记录错误并中止 API 启动
 ```
 
-关闭启动迁移只表示该机制不访问或修改数据库，不表示后续业务或初始化不需要数据库。开启启动迁移时，初始化和后台 Delegation 任务不能抢在迁移完成前运行。
+每次启动都需要连接数据库检查迁移历史；无待执行项时不执行 Schema 更新。初始化和后台 Delegation 任务不能抢在迁移检查和更新完成前运行。
 
 Program.cs 仅负责在正确时间创建服务 Scope 并调用迁移服务；EF Core 数据库操作放在 Infrastructure，通过接口支持迁移服务测试。模板和首个账号的初始化方式仍按前述阶段另行确定。
 
-计划配置：
+配置：
 
-- `Database:MigrateOnStartup`：默认 false，部署环境显式开启；环境变量为 `Database__MigrateOnStartup`。
+- 不再提供 `Database:MigrateOnStartup` 开关。
 - `Database:ExpectedDatabase`：必须与连接目标一致，防止在非预期数据库执行。
-- `Database:CommandTimeoutSeconds`：配置迁移命令超时；取值范围在实现时定义。
+- `Database:CommandTimeoutSeconds`：配置迁移命令超时，默认 180 秒，范围 1–1800 秒。
 
 ### 15.3 开发与发布流程
 
 1. 修改 Entity、配置及业务代码。
-2. 关闭启动迁移，通过 EF CLI 生成 Migration。
+2. 通过 EF CLI 和设计时 Factory 生成 Migration；工具仅创建 DbContext，不启动 API。
 3. 审核 Up / Down、Designer、Snapshot，并提交所有对应文件。
 4. 执行构建、必要的 SQL Server 集成测试和模型一致性检查。
 5. 发布时携带已经生成的 Migration，服务端不现场生成 Migration 源码。
-6. 启动 API 时，按环境配置应用目标数据库尚未执行的 Migration；成功后才开放服务。
+6. 启动 API 时，校验预期数据库并应用目标数据库尚未执行的 Migration；成功后才开放服务。
 
 CI 的模型检查可以发现缺少 Migration 文件，但不能保证删列、改类型或新增约束适用于现有数据。涉及这类变化时，在对应发布阶段审查备份、数据兼容和恢复方案；具体操作不在本次文档修改中执行。
 
@@ -390,8 +398,8 @@ CI 的模型检查可以发现缺少 Migration 文件，但不能保证删列、
 
 ### 15.4 迁移验收场景
 
-- 默认关闭时，不调用启动迁移数据库接口。
-- 显式开启且无待执行项时，不调用 MigrateAsync。
+- 每次启动都检查预期数据库和迁移历史。
+- 无待执行项时，不调用 MigrateAsync。
 - 有待执行项时，按配置应用并记录结果。
 - 预期数据库不一致时，在查询和执行迁移前拒绝操作。
 - 查询或执行失败时，阻止初始化、后台处理和 HTTP 启动。
