@@ -12,6 +12,9 @@ export interface TicketItem {
   createdAtUtc: string; updatedAtUtc: string
 }
 export interface TicketPage { items: TicketItem[]; total: number; page: number }
+export interface AttachmentItem { id: number; fileName: string; contentType: string; sizeBytes: number }
+export const attachmentAccept = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.log'
+export const fileSize = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 export interface WorkflowState {
   id: number; ticketId: number; templateCode: string; templateVersion: number; currentStepCode: string; status: string; rowVersion: string
   availableActions: { code: string; name: string; requiresComment: boolean }[]

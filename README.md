@@ -1,6 +1,6 @@
 # HelpDesk-System
 
-公司内部 IT Helpdesk System。当前已完成 Vue 3 + TypeScript / .NET 10 分层骨架、账号管理、Workflow Engine，以及阶段 4 Ticket 提交、分配和处理闭环。
+公司内部 IT Helpdesk System。当前已完成 Vue 3 + TypeScript / .NET 10 分层骨架、账号管理、Workflow Engine，Ticket 核心闭环，以及阶段 5 提交附件与处理历史。
 
 ## 项目结构
 
@@ -54,7 +54,7 @@ System Admin 可查看分页账号列表、创建账号、修改角色、启用�
 
 ## Workflow 初始化与执行
 
-更新代码后，先停止并重新启动 API，刷新前端；以 System Admin 登录，进入 **Workflow → Initialize default workflow**。该操作创建并发布 `HELPDESK_TICKET` 版本 1，包含四个步骤和四个动作。重复调用返回现有启用模板；不会覆盖其他版本，也不会自动启用已停用的旧模板。默认所有动作的备注可选。
+更新代码后，先停止并重新启动 API，刷新前端；以 System Admin 登录，进入 **Workflow → Initialize default workflow**。该操作创建并发布 `HELPDESK_TICKET` 版本 1，包含四个步骤和四个动作。重复调用返回现有启用模板；不会覆盖其他版本，也不会自动启用已停用的旧模板。Resolve / Reopen 必须填写说明；其他动作遵循模板的备注设置。该业务规则也适用于已有模板及工单，保留原有模板和实例副本。
 
 - Open → Start Processing → In Progress：当前负责的 Support IT Staff。
 - In Progress → Resolve → Resolved：当前负责的 Support IT Staff。
@@ -70,9 +70,9 @@ Application 契约在 `Workflows/IWorkflowEngine.cs`，Domain 规则在 `TicketW
 | GET /workflow-templates/active | System Admin 查看当前模板；未配置返回 404 |
 | POST /workflow-templates/default | System Admin 幂等初始化默认模板 |
 | GET /tickets/{ticketId}/workflow | 按 Ticket 可见性返回当前步骤、可用动作和历史 |
-| POST /tickets/{ticketId}/workflow/actions | 提交 ActionCode、RowVersion 和可选 Comment |
+| POST /tickets/{ticketId}/workflow/actions | 提交 ActionCode、RowVersion 和 Comment（Resolve / Reopen 必填） |
 
-动作请求示例：`{"actionCode":"RESOLVE","rowVersion":"<GET 返回的 Base64 RowVersion>","comment":"Fixed"}`。RowVersion 必须是 8 字节 SQL rowversion；旧版本或重复动作返回 409，无权限动作返回 403，不可见的 Ticket 返回 404，非法参数或缺少配置要求的备注返回 400。备注最多 4000 个字符。
+动作请求示例：`{"actionCode":"RESOLVE","rowVersion":"<GET 返回的 Base64 RowVersion>","comment":"Fixed"}`。RowVersion 必须是 8 字节 SQL rowversion；旧版本或重复动作返回 409，无权限动作返回 403，不可见的 Ticket 返回 404，非法参数或缺少必填备注返回 400。备注最多 4000 个字符。
 
 `StartAsync` 只供内部用例使用，不开放独立 HTTP 启动接口。阶段 4 创建 Ticket 时，调用方必须先在同一事务保存 Ticket，再启动流程；任何失败都回滚整个创建事务。引擎通过自有事务或调用方事务中的 Savepoint 保证复制、当前步骤和历史一致，且不会提交调用方事务。调用前必须保存 Ticket 的改动；失败后应终止该用例，避免继续使用已清理的 ChangeTracker。执行动作会锁定 Ticket 行，防止授权检查与保存之间负责人改变，并通过流程 RowVersion 防止重放。
 
@@ -88,9 +88,9 @@ Employee 在 **Submit ticket** 输入 Title（必填，最多 200 字符）、De
 
 列表支持状态筛选及每页 25 条分页，按最近更新时间排序。Employee 只看自己提交的；IT Staff 只看当前分配给自己的；两种 Admin 查看全部。Assignments 默认筛选未分配工单，打开详情即可选择负责人或调整优先级；转派时可以取消 Unassigned only 查看已分配工单。
 
-负责人只能选择启用的 Support IT Staff。分配、转派和优先级变更记录 TicketHistory，不改变当前 Workflow 状态；同值保存不重复记录历史。转派后原 Staff 的列表、详情和操作请求均失去权限，新 Staff 可以查看完整已有历史。详情页同时展示流程历史及分配 / 优先级历史。
+负责人只能选择启用的 Support IT Staff。分配、转派和优先级变更记录 TicketHistory，不改变当前 Workflow 状态；同值保存不重复记录历史。转派后原 Staff 的列表、详情和操作请求均失去权限，新 Staff 可以查看完整已有历史。详情页 Activity 时间线合并展示流程及分配 / 优先级历史。
 
-Ticket 详情按后端返回的可用动作展示按钮：负责人 Start Processing / Resolve，提交人 Close / Reopen，System Admin 按合法状态覆盖执行；Closed 只提供提交新工单的入口。备注仍遵循模板要求。收到 409 时刷新并重新核对内容，不自动重试写入。
+Ticket 详情按后端返回的可用动作展示按钮：负责人 Start Processing / Resolve，提交人 Close / Reopen，System Admin 按合法状态覆盖执行；Closed 只提供提交新工单的入口。Resolve / Reopen 必须填写说明；其他动作遵循模板要求。收到 409 时刷新并重新核对内容，不自动重试写入。
 
 | API | 权限 / 用途 |
 | --- | --- |
@@ -104,6 +104,30 @@ Ticket 详情按后端返回的可用动作展示按钮：负责人 Start Proces
 前端开发请求在上述路径前加 `/api`。Category 为 Hardware=1、Software=2、Network=3、Account=4、Other=5；Priority 为 Low=1、Medium=2、High=3、Critical=4。分配 / 优先级请求使用详情顶层的 `rowVersion`；流程动作继续使用 `workflow.rowVersion`。两者都是 Base64 SQL rowversion，不能混用。流程动作更新 Ticket 更新时间及版本；分配不修改流程版本，但每次执行仍重新检查当前负责人。
 
 Application 契约为 `Tickets/ITicketService.cs`，Infrastructure 的 `TicketService` 实现用例和事务，Api 的 `TicketEndpoints` 验证角色；Vue 的 `TicketsView`、`CreateTicketView`、`TicketDetailView` 复用现有请求封装及路由守卫。没有新增数据库表、Migration 或前端依赖。
+
+## 提交附件与处理历史
+
+阶段 5 已按简化需求调整：Employee 提交 Ticket 时填写 Title、Description、Category，并可附上文件。详情保留附件、分配、优先级、状态操作和处理历史。Public reply / Internal note 的页面及 API 已移除；Resolve / Reopen 仍需填写处理说明或重开原因。
+
+提交时可以选择 **最多 5 个附件，每个不超过 10 MiB**（界面显示 10 MB）。允许 PNG、JPG/JPEG、GIF、WEBP、BMP、PDF、DOC/DOCX、XLS/XLSX、TXT/LOG；不接受 SVG、HTML、可执行文件及 DOCM/XLSM。TXT/LOG 支持 UTF-8 和带 BOM 的 Unicode 文本。服务端检查文件名、扩展名、实际大小、签名及 Office ZIP 结构；忽略客户端声称的 MIME。图片可预览，PDF 可在浏览器打开，其他文件下载后查看。
+
+附件只能在创建 Ticket 时提交，提交后不提供追加、编辑或删除入口；Closed 的既有附件仍可读取。Employee 只看自己的工单附件，IT Staff 只看当前负责工单的附件，两种 Admin 可看全部。下载始终重新验证权限，转派后原 Staff 失去访问权限，并返回 attachment 和 nosniff。
+
+| API | 请求 / 响应 |
+| --- | --- |
+| POST /tickets | 支持原有 JSON；带文件使用 multipart/form-data：title、description、数值 category、重复 files |
+| GET /tickets/{id}/attachments | 当前用户可见的工单提交附件元数据 |
+| GET /tickets/{id}/attachments/{attachmentId}/download | Bearer 验证后下载；不可见时 404 |
+
+原 `/conversation` 和 `/messages` 路由已移除。为保留已有数据，TicketMessages 表、消息关联字段、历史 Migration 和旧附件文件均保留；旧消息及其附件不再通过当前页面或附件接口展示、下载。没有数据清除或新 Migration。
+
+创建工单的数据库写入在同一事务中完成，失败会回滚并清理未被记录引用的文件。上传限制为每文件 10 MiB、整个请求 51 MiB；反向代理部署时也需匹配请求限制。收到失败后保留表单供检查，遇到网络超时先查看列表确认是否已创建，避免重复提交。
+
+默认文件目录为当前服务身份的 LocalApplicationData/HelpDesk-System/Attachments；文件以随机 key.blob 保存，不放 wwwroot、不开放静态 URL，数据库只存元数据。生产环境通过 `Attachments__RootPath` 指定 **私有、不可执行、API 身份可读写的持久目录**，禁止指向静态站点目录；容器需挂载持久卷，同时备份数据库和附件。多 API 实例必须共享同一私有存储。当前尚未配置部署。
+
+API 启动及之后每小时核对一次超过 24 小时的文件，只删除数据库没有引用的孤立文件（包含对旧消息附件引用的保护）；数据库不可用时保留文件等待重试。正常失败立即清理，异常中断可能暂留文件。
+
+当前检查**不包含病毒扫描**，签名和格式检查不能证明文件无恶意内容；对外开放前应接入本地恶意文件扫描，并按组织要求控制下载和打开。实现参考 [ASP.NET Core 文件上传](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads?view=aspnetcore-10.0) 与 [OWASP 上传指南](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)。
 
 ## 本地启动
 
@@ -174,7 +198,9 @@ dotnet test .\HelpDesk.slnx --configuration Release
 
 SQL Server 测试使用事务回滚或针对性清理移除自己创建的记录。账号和流程测试会在同一 SQL Server 创建独立、带随机名称的 `HelpDeskAuthTests_*` / `HelpDeskWorkflowTests_*` 数据库，应用现有 Migration 并在结束时删除这些测试库，因此测试身份需要创建和删除数据库的权限；不会删除配置指向的 HelpDeskDb。若测试进程被强制结束，可能需要按对应随机名称手动清理残留测试库。
 
-未设置 `HELPDESK_TEST_CONNECTION` 时，14 项集成测试会显示为 Skipped；不能将跳过视为数据库验证通过。2026-10-24 验证：48 项单元测试、14 项 SQL Server 集成测试全部通过，无跳过。在原有账号和流程测试上，新增 Ticket 完整 API 闭环、提交人等字段防篡改、分页与可见性、分配和优先级历史、并发编辑、失效权限和创建失败回滚；编号测试覆盖马来西亚午夜 / 跨年、全局 ID 及字段长度。
+未设置 `HELPDESK_TEST_CONNECTION` 时，18 项集成测试会显示为 Skipped；不能将跳过视为数据库验证通过。2026-10-24 验证：48 项单元测试、14 项 SQL Server 集成测试全部通过，无跳过。在原有账号和流程测试上，新增 Ticket 完整 API 闭环、提交人等字段防篡改、分页与可见性、分配和优先级历史、并发编辑、失效权限和创建失败回滚；编号测试覆盖马来西亚午夜 / 跨年、全局 ID 及字段长度。
+
+2026-10-25 阶段 5 简化版：66 项单元测试与 18 项 SQL Server 集成测试全部通过，无跳过。覆盖附件校验、五附件提交、角色可见性、转派后权限、Closed 下载、旧消息路由移除和旧消息附件隐藏、数据库失败回滚及孤立文件清理。浏览器已验证 Employee 提交、附件显示、Employee / Admin 均无消息入口和 375px 布局。测试附件使用独立临时目录，结束后清理；没有新增 Migration 或依赖。
 
 ## 构建
 
@@ -202,6 +228,6 @@ npm.cmd run build
 - [需求说明](docs/requirements.md)
 - [数据库设计草案](docs/database-design.md)
 
-当前已完成阶段 4。默认流程仍由 System Admin 在 Workflow 页首次初始化，现有账号不受影响。下一阶段接入公开回复、内部备注和附件。
+当前已完成阶段 5。默认流程仍由 System Admin 在 Workflow 页首次初始化，现有账号不受影响。下一阶段为 Workflow Template 管理，具体编辑范围待确认。
 
 JWT 验证遵循 [ASP.NET Core Bearer 文档](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0)，前端权限导航使用 [Vue Router guards](https://router.vuejs.org/guide/advanced/navigation-guards)。界面导航只提供交互限制，实际权限由 API Bearer 验证和角色授权执行。

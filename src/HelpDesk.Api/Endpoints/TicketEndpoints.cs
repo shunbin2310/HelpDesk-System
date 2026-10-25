@@ -11,11 +11,8 @@ public static class TicketEndpoints
         tickets.MapGet("/", async (int? page, string? status, bool? onlyUnassigned, ITicketService service, CancellationToken ct) =>
             ToHttp(await service.ListAsync(page ?? 1, status, onlyUnassigned ?? false, ct)));
         tickets.MapGet("/{ticketId:long}", async (long ticketId, ITicketService service, CancellationToken ct) => ToHttp(await service.GetAsync(ticketId, ct)));
-        tickets.MapPost("/", async (CreateTicketRequest request, ITicketService service, CancellationToken ct) =>
-        {
-            var result = await service.CreateAsync(request, ct);
-            return result.Status == TicketResultStatus.Success ? Results.Created($"/tickets/{result.Value!.Ticket.Id}", result.Value) : ToHttp(result);
-        }).RequireAuthorization(policy => policy.RequireRole(ApplicationRoles.Employee));
+        tickets.MapPost("/", TicketUploadEndpoints.CreateAsync).DisableAntiforgery()
+            .RequireAuthorization(policy => policy.RequireRole(ApplicationRoles.Employee));
         tickets.MapGet("/assignees", async (ITicketService service, CancellationToken ct) => ToHttp(await service.GetAssigneesAsync(ct)))
             .RequireAuthorization(policy => policy.RequireRole(ApplicationRoles.SystemAdmin, ApplicationRoles.SupportAdmin));
         tickets.MapPut("/{ticketId:long}/assignment", async (long ticketId, AssignTicketRequest request, ITicketService service, CancellationToken ct) =>
@@ -24,7 +21,7 @@ public static class TicketEndpoints
             ToHttp(await service.SetPriorityAsync(ticketId, request, ct))).RequireAuthorization(policy => policy.RequireRole(ApplicationRoles.SystemAdmin, ApplicationRoles.SupportAdmin));
     }
 
-    private static IResult ToHttp<T>(TicketResult<T> result) => result.Status switch
+    internal static IResult ToHttp<T>(TicketResult<T> result) => result.Status switch
     {
         TicketResultStatus.Success => Results.Ok(result.Value),
         TicketResultStatus.NotFound => Results.Problem(statusCode: 404, title: "Ticket not found", detail: result.Error),

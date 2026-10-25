@@ -55,6 +55,7 @@ app.MapAuthenticationEndpoints();
 app.MapUserEndpoints();
 app.MapWorkflowEndpoints();
 app.MapTicketEndpoints();
+app.MapTicketUploadEndpoints();
 
 app.Run();
 

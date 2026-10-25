@@ -109,7 +109,7 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
             if (!TicketWorkflowPolicy.CanExecute(ticket, actor.Id, actor.Role, code, actioners))
                 return Failed(WorkflowResultStatus.Forbidden, "You cannot perform this Ticket action.");
             var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
-            if (action.RequiresComment && comment is null) return Failed(WorkflowResultStatus.Invalid, "A comment is required for this action.");
+            if (TicketWorkflowPolicy.RequiresComment(code, action.RequiresComment) && comment is null) return Failed(WorkflowResultStatus.Invalid, "A comment is required for this action.");
             var now = DateTimeOffset.UtcNow;
             process.CurrentStepInstanceId = to.Id;
             process.Status = to.Code == TicketWorkflow.Closed ? WorkflowInstanceStatus.Completed : WorkflowInstanceStatus.Running;
@@ -145,7 +145,7 @@ public sealed class WorkflowEngine(HelpDeskDbContext db, ICurrentUserContext cur
         var available = process.Status == WorkflowInstanceStatus.Completed ? [] : actions
             .Where(x => TicketWorkflowPolicy.IsTransition(step.Code, x.Code, steps[x.ToStepInstanceId].Code)
                 && TicketWorkflowPolicy.CanExecute(ticket, actor.Id, actor.Role, x.Code, rules.Where(a => a.ActionInstanceId == x.Id)))
-            .Select(x => new WorkflowActionOption(x.Code, x.Name, x.RequiresComment)).ToArray();
+            .Select(x => new WorkflowActionOption(x.Code, x.Name, TicketWorkflowPolicy.RequiresComment(x.Code, x.RequiresComment))).ToArray();
         var history = await db.WorkflowHistory.AsNoTracking().Where(x => x.ProcessInstanceId == process.Id)
             .OrderBy(x => x.ActionAtUtc).ThenBy(x => x.Id).Select(x => new WorkflowHistoryItem(x.FromStepCode, x.ToStepCode,
                 x.ActionCode, x.ActionByUserId, x.ActionByNameSnapshot, x.Comment, x.ActionAtUtc)).ToListAsync(ct);

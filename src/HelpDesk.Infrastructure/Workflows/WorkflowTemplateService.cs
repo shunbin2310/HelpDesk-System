@@ -62,7 +62,7 @@ public sealed class WorkflowTemplateService(HelpDeskDbContext db, ICurrentUserCo
             ];
             var actions = transitions.Select(x => new WorkflowActionTemplate
             {
-                ProcessTemplateId = template.Id, Code = x.Code, Name = x.Name,
+                ProcessTemplateId = template.Id, Code = x.Code, Name = x.Name, RequiresComment = TicketWorkflowPolicy.RequiresComment(x.Code, false),
                 FromStepTemplateId = byCode[x.From].Id, ToStepTemplateId = byCode[x.To].Id
             }).ToArray();
             db.WorkflowActionTemplates.AddRange(actions);
@@ -92,7 +92,7 @@ public sealed class WorkflowTemplateService(HelpDeskDbContext db, ICurrentUserCo
         return new(template.Id, template.Code, template.Name, template.Version,
             steps.Select(x => new WorkflowTemplateStep(x.Code, x.Name, x.DisplayOrder, x.IsInitial, x.IsTerminal)).ToArray(),
             actions.Select(x => new WorkflowTemplateAction(x.Code, x.Name, byId[x.FromStepTemplateId].Code,
-                byId[x.ToStepTemplateId].Code, x.RequiresComment,
+                byId[x.ToStepTemplateId].Code, TicketWorkflowPolicy.RequiresComment(x.Code, x.RequiresComment),
                 actioners.Where(a => a.ActionTemplateId == x.Id).Select(a => a.ActionerType.ToString()).ToArray())).ToArray());
     }
 }

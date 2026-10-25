@@ -2,6 +2,7 @@ using HelpDesk.Application.Users;
 using HelpDesk.Application.Workflows;
 using HelpDesk.Application.Tickets;
 using HelpDesk.Infrastructure.Tickets;
+using HelpDesk.Infrastructure.Attachments;
 using HelpDesk.Infrastructure.Workflows;
 using HelpDesk.Infrastructure.Identity;
 using HelpDesk.Infrastructure.Persistence;
@@ -42,6 +43,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserAccountStore, UserAccountStore>();
         services.AddScoped<IWorkflowEngine, WorkflowEngine>();
         services.AddScoped<ITicketService, TicketService>();
+        services.AddScoped<ITicketAttachmentService, TicketAttachmentService>();
+        services.AddOptions<AttachmentStorageOptions>().Bind(configuration.GetSection("Attachments"))
+            .Validate(x => !string.IsNullOrWhiteSpace(x.RootPath), "Attachments:RootPath must specify a private directory.").ValidateOnStart();
+        services.AddSingleton<IAttachmentStore, FileAttachmentStore>();
+        services.AddScoped<TicketAttachmentWriter>();
+        services.AddHostedService<AttachmentReconciler>();
         services.AddScoped<IWorkflowTemplateService, WorkflowTemplateService>();
         services.Configure<DatabaseMigrationOptions>(configuration.GetSection(DatabaseMigrationOptions.SectionName));
         services.AddScoped<IStartupMigrationDatabase, EfStartupMigrationDatabase>();
