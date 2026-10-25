@@ -123,7 +123,7 @@ Application 契约为 `Tickets/ITicketService.cs`，Infrastructure 的 `TicketSe
 
 创建工单的数据库写入在同一事务中完成，失败会回滚并清理未被记录引用的文件。上传限制为每文件 10 MiB、整个请求 51 MiB；反向代理部署时也需匹配请求限制。收到失败后保留表单供检查，遇到网络超时先查看列表确认是否已创建，避免重复提交。
 
-默认文件目录为当前服务身份的 LocalApplicationData/HelpDesk-System/Attachments；文件以随机 key.blob 保存，不放 wwwroot、不开放静态 URL，数据库只存元数据。生产环境通过 `Attachments__RootPath` 指定 **私有、不可执行、API 身份可读写的持久目录**，禁止指向静态站点目录；容器需挂载持久卷，同时备份数据库和附件。多 API 实例必须共享同一私有存储。当前尚未配置部署。
+默认文件目录为当前服务身份的 LocalApplicationData/HelpDesk-System/Attachments；文件以随机 key.blob 保存，不放 wwwroot、不开放静态 URL，数据库只存元数据。生产环境通过 `Attachments__RootPath` 指定 **私有、不可执行、API 身份可读写的持久目录**，禁止指向静态站点目录；容器需挂载持久卷，同时备份数据库和附件。多 API 实例必须共享同一私有存储。本机 Docker 已配置独立持久卷，服务器部署仍待实施。
 
 API 启动及之后每小时核对一次超过 24 小时的文件，只删除数据库没有引用的孤立文件（包含对旧消息附件引用的保护）；数据库不可用时保留文件等待重试。正常失败立即清理，异常中断可能暂留文件。
 
@@ -171,6 +171,8 @@ Cancel / End early 会先显示确认弹窗，默认焦点为 Keep delegation，
 手动测试：准备两个 IT Staff，先将一张 Open 工单分配给 A；在 Delegations 创建 A→B，开始和结束日期都选今天。确认负责人立即变为 B，再分配另一张工单给 A，应实际交给 B。结束日期早于开始日期或开始日期早于今天时不能提交。可用 End early 即时验证归还；自然到期需保持 API 运行到结束日期的次日 00:00 MYT，等待最多约 30 秒并 Refresh，未被人工转派的工单应归还 A。另测未来开始日期时可 Cancel、重叠日期被拒绝、期间 Resolved 后归还、Closed 保留、人工转给 C 后保留，以及账号停用时 Needs attention。
 
 ## 本地启动
+
+当前 Docker 方式是 Web / API 连接 Windows 现有 BIN / HelpDeskDb，共用原账号、工单及附件，使用[Docker 连接本机数据库说明](docs/docker-host-sql.md)。原先三个容器的独立测试库方案见[Docker 独立测试库说明](docs/docker-local.md)，数据卷保留。下列命令保留为主机直接运行的开发方式。
 
 以下命令使用 PowerShell。从仓库根目录打开第一个终端，启动 API：
 
@@ -267,7 +269,7 @@ npm.cmd ci
 npm.cmd run build
 ```
 
-前端 build 会先执行 vue-tsc 类型检查，再产出 dist。可以单独运行 `npm.cmd run type-check`。`npm.cmd run preview` 只预览前端构建产物，不包含开发代理；生产环境的 API 路由及部署方式尚未配置。
+前端 build 会先执行 vue-tsc 类型检查，再产出 dist。可以单独运行 `npm.cmd run type-check`。`npm.cmd run preview` 只预览前端构建产物，不包含开发代理；本机 Docker 使用 Nginx 提供静态文件和同源 `/api/` 转发，服务器部署仍待实施。
 
 工具文档：[Vue TypeScript](https://vuejs.org/guide/typescript/overview.html)、[Vite](https://vite.dev/guide/)。
 

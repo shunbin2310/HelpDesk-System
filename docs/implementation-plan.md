@@ -50,7 +50,7 @@
 9. GitHub Actions + Docker 部署与发布（环境待确认）
 ```
 
-每个功能阶段都包含对应 API、前端界面和必要测试。先完成核心 Ticket 闭环及自动代理；模板编辑器按用户确认暂缓，接着做阶段 8 整体验收。
+每个功能阶段都包含对应 API、前端界面和必要测试。核心 Ticket 闭环、自动代理及阶段 8 已由用户验收；模板编辑器继续暂缓，阶段 9 先完成本机 Docker 测试。
 
 ## 3. 阶段 0：基础项目骨架
 
@@ -276,8 +276,10 @@ Employee Close → Closed
 
 目标：确认第一版约定功能完整、权限一致，并能从空开发环境复现。
 
-- [ ] 使用四个角色完成一次完整界面验收，并覆盖 Reopen 和 Delegation 两条分支。
-- [ ] 按需求说明逐项执行验收场景，核对状态、负责人、历史及附件可见性。
+状态：2026-10-25 用户确认已完成四角色流程、代理与权限、运行与交付三组验收。核心前端流程采用手工界面验收，现有自动化覆盖后端与 SQL Server；未增加浏览器测试框架。接下来先做本机 Docker，模板编辑器仍暂缓。
+
+- [x] 使用四个角色完成一次完整界面验收，并覆盖 Reopen 和 Delegation 两条分支。
+- [x] 按需求说明逐项执行验收场景，核对状态、负责人、历史及附件可见性。
 - [ ] 验证并发操作、重复提交、账号停用和模板版本变化。
 - [ ] 完成 Domain / Application 的业务规则测试，以及 API、数据库和核心前端流程的集成测试。
 - [ ] 在专用 SQL Server 测试环境验证 Migration、外键、唯一性及并发标记。
@@ -292,8 +294,12 @@ Employee Close → Closed
 
 技术方向已确定为 GitHub、GitHub Actions、Docker。服务器、镜像仓库、触发分支、自动部署条件及 SQL Server 部署位置待确认后展开，不沿用其他仓库的环境配置。
 
+2026-10-25 用户确认先做本机 Docker 测试。新增前后端多阶段 Dockerfile、Nginx 同源 API 转发、compose.local.yml、本机环境示例及运行说明；使用独立 SQL Server 和数据库 / 附件 / Data Protection 持久化卷。GitHub Actions、镜像发布、Ubuntu 部署和 HTTPS 仍未实施。具体命令与验证见[本机 Docker 说明](docker-local.md)。
+
+后续用户明确选择 Docker 连接 Windows 现有 BIN / HelpDeskDb，并批准专用 SQL 登录 helpdesk_docker_local 仅在此库获得 db_owner，以支持启动 Migration。增加 compose.host-sql.yml 和私有环境文件示例，现有 Windows 附件目录绑定到 API；原独立 Docker SQL 数据及文件卷保留。实际运行方式和命令见[本机数据库连接说明](docker-host-sql.md)。
+
 - [ ] 确认服务器、SQL Server 所在位置、域名及 HTTPS 方案。
-- [ ] 参考公司项目编写前后端独立的多阶段 Dockerfile，以及适合目标环境的容器编排配置。
+- [x] 编写前后端独立的多阶段 Dockerfile 和本机 Docker Compose 配置，沿用现有 Solution 分层；服务器编排在选定目标后再配置。
 - [ ] 建立 GitHub Actions Workflow：后端构建与测试、前端类型检查与构建、必要测试及 Migration 模型检查通过后，再构建并推送镜像。
 - [ ] 确认镜像仓库、部署触发方式、反向代理和目标环境，并实现对应 CD 步骤。
 - [ ] 配置生产前端与 API 路由；开发 Vite 代理不能直接作为生产部署方案。
@@ -313,7 +319,7 @@ Employee Close → Closed
 4. 用中文交付：修改文件、关键变化、可测试步骤、验证结果和剩余限制。
 5. 完成验收后更新本计划的状态及相关文档，不提前勾选未完成项目。
 
-当前已完成账号、固定 Workflow、Ticket、提交附件及 Delegation。下一步为阶段 8 整体验收；阶段 6 模板编辑器暂缓，部署细节仍待确认。
+当前已完成账号、固定 Workflow、Ticket、提交附件及 Delegation，用户已确认阶段 8 验收完成。当前工作为本机 Docker 测试；阶段 6 模板编辑器继续暂缓，GitHub Actions 和服务器部署细节待后续确认。
 
 ## 14. Project1 功能参考清单
 
@@ -461,4 +467,4 @@ PR 检查不直接修改部署数据库。发布条件、分支、Tag、环境�
 - 不复制公司的账号、证书、服务连接、镜像地址、数据库凭据、AWS 配置或 Azure Pipelines 环境值。
 - 后续配置如与 Project1 不同，以 Helpdesk 已确认的需求和部署环境为准。
 
-本节只记录参考关系和实施方向，本次不创建 Dockerfile、GitHub Actions Workflow 或实际部署资源。
+本节记录参考关系和实施方向。2026-10-25 已增加本机 Dockerfile / Compose；GitHub Actions Workflow 和服务器部署资源仍未创建。

@@ -1,0 +1,44 @@
+name: helpdesk-host-sql
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: src/HelpDesk.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=tcp:host.docker.internal,${HELPDESK_HOST_SQL_PORT:-1433};Database=HelpDeskDb;User Id=helpdesk_docker_local;Password=${HELPDESK_SQL_PASSWORD:?Set HELPDESK_SQL_PASSWORD in .env.docker.host-sql};Encrypt=True;TrustServerCertificate=True"
+      Database__ExpectedDatabase: HelpDeskDb
+      Jwt__SigningKey: "${HELPDESK_JWT_KEY:?Set HELPDESK_JWT_KEY in .env.docker.host-sql}"
+      Attachments__RootPath: /data/attachments
+    volumes:
+      - type: bind
+        source: "${HELPDESK_ATTACHMENTS_PATH:?Set the existing Windows attachment directory}"
+        target: /data/attachments
+        bind:
+          create_host_path: false
+      - data-protection:/home/app/.aspnet/DataProtection-Keys
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: ./src/HelpDesk.Web
+    ports:
+      - "127.0.0.1:${HELPDESK_WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  data-protection:
