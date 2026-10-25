@@ -8,6 +8,7 @@
 *.suo
 *.tsbuildinfo
 *.log
+artifacts/
 .env
 .env.*
 !.env.example
