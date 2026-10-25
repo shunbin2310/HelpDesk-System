@@ -22,6 +22,11 @@
     <File Path="src/HelpDesk.Web/src/services/session.ts" />
     <File Path="src/HelpDesk.Web/src/services/tickets.ts" />
   </Folder>
+  <Folder Name="/src/HelpDesk.Web/src/components/">
+    <File Path="src/HelpDesk.Web/src/components/AttachmentPicker.vue" />
+    <File Path="src/HelpDesk.Web/src/components/AttachmentList.vue" />
+    <File Path="src/HelpDesk.Web/src/components/TicketTimeline.vue" />
+  </Folder>
   <Folder Name="/src/HelpDesk.Web/src/views/">
     <File Path="src/HelpDesk.Web/src/views/LoginView.vue" />
     <File Path="src/HelpDesk.Web/src/views/HomeView.vue" />

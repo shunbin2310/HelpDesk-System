@@ -33,7 +33,7 @@ async function login() {
     <section class="login-intro">
       <p class="eyebrow">COMPANY IT SUPPORT</p>
       <h1>A clear path <br>to better support.</h1>
-      <p>One place for your IT issues, conversations, and updates.</p>
+      <p>One place to report IT issues and follow their progress.</p>
       <div class="intro-detail"><span class="brand-mark" aria-hidden="true">H</span><div><strong>Helpdesk</strong><p>Here to keep your work moving.</p></div></div>
     </section>
     <section class="card login-card" aria-labelledby="login-title">

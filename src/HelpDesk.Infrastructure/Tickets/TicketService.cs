@@ -7,11 +7,12 @@ using HelpDesk.Domain.Entities.Tickets;
 using HelpDesk.Domain.Enums;
 using HelpDesk.Infrastructure.Persistence;
 using HelpDesk.Infrastructure.Workflows;
+using HelpDesk.Infrastructure.Attachments;
 using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Infrastructure.Tickets;
 
-public sealed class TicketService(HelpDeskDbContext db, ICurrentUserContext current, IWorkflowEngine workflow) : ITicketService
+public sealed class TicketService(HelpDeskDbContext db, ICurrentUserContext current, IWorkflowEngine workflow, TicketAttachmentWriter files) : ITicketService
 {
     public async Task<TicketResult<TicketPage>> ListAsync(int page, string? status, bool onlyUnassigned, CancellationToken cancellationToken = default)
     {
@@ -55,24 +56,36 @@ public sealed class TicketService(HelpDeskDbContext db, ICurrentUserContext curr
     }
 
     public Task<TicketResult<TicketDetail>> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken = default) =>
-        WriteAsync(async () =>
+        CreateAsync(request, [], cancellationToken);
+
+    public async Task<TicketResult<TicketDetail>> CreateAsync(CreateTicketRequest request, IReadOnlyList<AttachmentUpload> uploads, CancellationToken cancellationToken = default)
+    {
+        var keys = new List<string>();
+        try
         {
-            var actor = await WorkflowActorReader.ReadAsync(db, current.UserId, cancellationToken);
-            if (actor?.Role != ApplicationRoles.Employee) return Denied();
-            if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 200
-                || string.IsNullOrWhiteSpace(request.Description) || request.Description.Length > 4000 || !Enum.IsDefined(request.Category))
-                return Invalid("Title (at most 200 characters), description (at most 4000 characters) and a valid category are required.");
-            var now = DateTimeOffset.UtcNow;
-            var ticket = new Ticket { TicketNumber = Guid.NewGuid().ToString("N"), Title = request.Title.Trim(),
-                Description = request.Description.Trim(), Category = request.Category, RequestedByUserId = actor.Id,
-                Priority = TicketPriority.Medium, CreatedAtUtc = now, UpdatedAtUtc = now };
-            db.Tickets.Add(ticket); await db.SaveChangesAsync(cancellationToken);
-            ticket.TicketNumber = TicketNumbers.Create(ticket.Id, now); await db.SaveChangesAsync(cancellationToken);
-            var started = await workflow.StartAsync(ticket.Id, cancellationToken);
-            if (started.Status != WorkflowResultStatus.Success)
-                return new(started.Status == WorkflowResultStatus.Forbidden ? TicketResultStatus.Forbidden : TicketResultStatus.Conflict, Error: started.Error);
-            return await GetAsync(ticket.Id, cancellationToken);
-        }, cancellationToken);
+            return await WriteAsync(async () =>
+            {
+                var actor = await WorkflowActorReader.ReadAsync(db, current.UserId, cancellationToken);
+                if (actor?.Role != ApplicationRoles.Employee) return Denied();
+                if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 200
+                    || string.IsNullOrWhiteSpace(request.Description) || request.Description.Length > 4000 || !Enum.IsDefined(request.Category))
+                    return Invalid("Title (at most 200 characters), description (at most 4000 characters) and a valid category are required.");
+                AttachmentContent.ValidateBatch(uploads);
+                var now = DateTimeOffset.UtcNow;
+                var ticket = new Ticket { TicketNumber = Guid.NewGuid().ToString("N"), Title = request.Title.Trim(),
+                    Description = request.Description.Trim(), Category = request.Category, RequestedByUserId = actor.Id,
+                    Priority = TicketPriority.Medium, CreatedAtUtc = now, UpdatedAtUtc = now };
+                db.Tickets.Add(ticket); await db.SaveChangesAsync(cancellationToken);
+                ticket.TicketNumber = TicketNumbers.Create(ticket.Id, now); await db.SaveChangesAsync(cancellationToken);
+                var started = await workflow.StartAsync(ticket.Id, cancellationToken);
+                if (started.Status != WorkflowResultStatus.Success)
+                    return new(started.Status == WorkflowResultStatus.Forbidden ? TicketResultStatus.Forbidden : TicketResultStatus.Conflict, Error: started.Error);
+                await files.AddAsync(ticket.Id, actor.Id, uploads, keys, cancellationToken);
+                return await GetAsync(ticket.Id, cancellationToken);
+            }, cancellationToken);
+        }
+        finally { await files.RemoveUnreferencedAsync(keys); }
+    }
 
     public async Task<TicketResult<IReadOnlyList<TicketAssignee>>> GetAssigneesAsync(CancellationToken cancellationToken = default)
     {
@@ -149,26 +162,8 @@ public sealed class TicketService(HelpDeskDbContext db, ICurrentUserContext curr
             RequestedByUserId = ticket.RequestedByUserId, RequesterName = user.FullName, AssignedToUserId = ticket.AssignedToUserId,
             AssigneeName = assignee == null ? null : assignee.FullName, CreatedAtUtc = ticket.CreatedAtUtc, UpdatedAtUtc = ticket.UpdatedAtUtc };
 
-    private async Task<TicketResult<TicketDetail>> WriteAsync(Func<Task<TicketResult<TicketDetail>>> operation, CancellationToken ct)
-    {
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        try
-        {
-            var result = await operation();
-            if (result.Status == TicketResultStatus.Success) await transaction.CommitAsync(ct);
-            else { await transaction.RollbackAsync(ct); db.ChangeTracker.Clear(); }
-            return result;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            await transaction.RollbackAsync(CancellationToken.None); db.ChangeTracker.Clear();
-            return new(TicketResultStatus.Conflict, Error: "This Ticket changed. Refresh and try again.");
-        }
-        catch
-        {
-            await transaction.RollbackAsync(CancellationToken.None); db.ChangeTracker.Clear(); throw;
-        }
-    }
+    private Task<TicketResult<TicketDetail>> WriteAsync(Func<Task<TicketResult<TicketDetail>>> operation, CancellationToken ct) =>
+        TicketWrites.RunAsync(db, operation, ct);
 
     private static bool IsAdmin(UserAccount actor) => actor.Role is ApplicationRoles.SystemAdmin or ApplicationRoles.SupportAdmin;
     private static TicketResult<TicketDetail> Missing() => new(TicketResultStatus.NotFound, Error: "Ticket was not found.");

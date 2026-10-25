@@ -35,6 +35,7 @@ public interface ITicketService
     Task<TicketResult<TicketPage>> ListAsync(int page, string? status, bool onlyUnassigned, CancellationToken cancellationToken = default);
     Task<TicketResult<TicketDetail>> GetAsync(long ticketId, CancellationToken cancellationToken = default);
     Task<TicketResult<TicketDetail>> CreateAsync(CreateTicketRequest request, CancellationToken cancellationToken = default);
+    Task<TicketResult<TicketDetail>> CreateAsync(CreateTicketRequest request, IReadOnlyList<AttachmentUpload> uploads, CancellationToken cancellationToken = default);
     Task<TicketResult<IReadOnlyList<TicketAssignee>>> GetAssigneesAsync(CancellationToken cancellationToken = default);
     Task<TicketResult<TicketDetail>> AssignAsync(long ticketId, AssignTicketRequest request, CancellationToken cancellationToken = default);
     Task<TicketResult<TicketDetail>> SetPriorityAsync(long ticketId, SetTicketPriorityRequest request, CancellationToken cancellationToken = default);

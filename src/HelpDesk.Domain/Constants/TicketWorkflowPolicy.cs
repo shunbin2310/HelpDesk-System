@@ -6,6 +6,7 @@ namespace HelpDesk.Domain.Constants;
 
 public static class TicketWorkflowPolicy
 {
+    public static bool RequiresComment(string action, bool configured) => configured || action is TicketWorkflow.Resolve or TicketWorkflow.Reopen;
     public static bool CanView(Ticket ticket, int userId, string role) => role switch
     {
         ApplicationRoles.SystemAdmin or ApplicationRoles.SupportAdmin => true,

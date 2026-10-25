@@ -9,6 +9,9 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using HelpDesk.Infrastructure.Attachments;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace HelpDesk.IntegrationTests;
 
@@ -28,6 +31,9 @@ internal sealed class WorkflowTestDatabase : IAsyncDisposable
 
     public HelpDeskDbContext Context(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<HelpDeskDbContext>()
         .UseSqlServer(connection).AddInterceptors(interceptors).Options);
+
+    public FileAttachmentStore Store() => new(Options.Create(new AttachmentStorageOptions { RootPath = Factory.AttachmentRoot }), NullLogger<FileAttachmentStore>.Instance);
+    public TicketAttachmentWriter Files(HelpDeskDbContext db) => new(db, Store(), NullLogger<TicketAttachmentWriter>.Instance);
 
     public async Task InitializeAsync()
     {

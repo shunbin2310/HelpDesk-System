@@ -25,7 +25,7 @@
 
 公司项目 `C:\Users\shun bin\source\repos\AHAM - Agent CIF 2026` 是 Solution 分层和工程组织的主要参考，包括 Api、Application、Domain、Infrastructure、Web、EF 启动迁移及 Docker 构建和部署分阶段的做法。`C:\Users\shun bin\source\repos\Project1` 用于参考 JWT、Workflow Template / Instance / History、启动迁移控制及测试等具体实现。Helpdesk 的自动化平台采用 GitHub Actions；公司项目的 Azure Pipelines 配置需要按此适配。
 
-第一版范围为用户与角色、工单、分配、代理、Public Reply、Internal Note、附件、优先级、操作历史及工作流配置。多团队、SLA、邮件或聊天接入、Knowledge Base 等未纳入本轮已确认范围。Dashboard、通知以及服务器、镜像仓库和部署触发方式等细节尚未确认；GitHub、GitHub Actions 和 Docker 的方向已确定。
+第一版范围为用户与角色、工单、分配、代理、提交附件、优先级、操作历史及工作流配置。多团队、SLA、邮件或聊天接入、Knowledge Base 等未纳入本轮已确认范围。Dashboard、通知以及服务器、镜像仓库和部署触发方式等细节尚未确认；GitHub、GitHub Actions 和 Docker 的方向已确定。
 
 ### Solution 组织建议
 
@@ -68,15 +68,13 @@ Migration 管理参考公司项目 API 启动时查询并应用待执行 Migrati
 | Start Processing、Resolve | 否 | 仅当前负责的 Ticket | 不因管理角色自动获得这些动作 | 可管理覆盖执行当前可用动作 |
 | Close、Reopen | 仅自己提交、且状态允许的 Ticket | 否 | 不因管理角色自动获得这些动作 | 可管理覆盖执行当前可用动作 |
 | 调整优先级 | 否 | 否 | 是 | 是 |
-| Public Reply | 自己的 Ticket | 当前负责的 Ticket | 所有 Ticket | 所有 Ticket |
-| Internal Note | 不可查看或添加 | 当前负责的 Ticket | 所有 Ticket | 所有 Ticket |
 | 设置 Delegation | 否 | 否 | 是 | 是 |
 | 管理账号和角色 | 否 | 否 | 否 | 是 |
 | 管理、发布 Workflow Template | 否 | 否 | 否 | 是 |
 
 System Admin 的全部业务权限仍受合法流程约束，例如不能从 Open 直接 Close，也不能 Reopen 已 Closed 的 Ticket。仅 Employee 可以提交工单，是对通用管理员权限的明确限制。
 
-Support IT Staff 不设用于提交问题的 My Tickets 入口。Ticket 转派后，新负责人可查看完整 IT 处理历史，原负责人不再可查看或处理；权限以当前负责人为准，而不是以过去是否处理过为准。权限应在列表、搜索、详情、回复、附件和操作接口中一致执行。
+Support IT Staff 不设用于提交问题的 My Tickets 入口。Ticket 转派后，新负责人可查看完整 IT 处理历史，原负责人不再可查看或处理；权限以当前负责人为准，而不是以过去是否处理过为准。权限应在列表、搜索、详情、附件和操作接口中一致执行。
 
 ## 3. 提交 Ticket
 
@@ -123,7 +121,7 @@ Employee 提交 → Open
 - Resolved 表示已提供解决方案，等待 Employee 确认，流程仍在运行。
 - Employee 认为问题未解决时，可 Reopen，回到 In Progress，由当前负责人继续处理。
 - Closed 是流程终点，不能 Reopen；问题再次发生时，Employee 提交新 Ticket。
-- Reopen 原因、Resolve 处理说明是否必须填写，尚待确认；可在 Action Template 中表达备注要求。
+- Reopen 原因、Resolve 处理说明必须填写，最多 4000 字符；也适用于已有实例，模板不能放宽此业务规则。其他动作遵循模板说明要求。
 - 每次流程操作记录前后状态、操作人、时间及操作说明。
 
 ## 5. Assignment
@@ -171,25 +169,20 @@ Delegation 由 Support Admin / System Admin 设置，指定原负责人 A、代�
 
 代理重叠、A → B → C 链式代理、提前结束、取消、代理期间人员停用，以及任务调度延迟的处理尚未确认。为保持第一版简单，数据库设计建议先限制重叠和链式代理；这属于待审核建议，不是已确认规则。
 
-## 7. 沟通、附件与历史
+## 7. 提交附件与处理历史
 
-| 类型 | 可见范围 |
-| --- | --- |
-| Public Reply | 提交人、当前负责 Staff、Support Admin、System Admin |
-| Internal Note | 当前负责 Staff、Support Admin、System Admin；Employee 不可见 |
+2026-10-25 已确认精简：取消 Public Reply 和 Internal Note；Employee 只需提交 Title、Description、Category 和可选附件。分配、Start Processing、Resolve、Close、Reopen 保留，Resolve / Reopen 的说明要求保留。
 
-回复和备注记录作者及时间。新负责人能查看前任的完整处理记录；Employee 仍只能看到对员工公开的内容。
+附件仅在创建 Ticket 时上传，最多 5 个、每个 10 MiB；支持 PNG、JPG/JPEG、GIF、WEBP、BMP、PDF、DOC/DOCX、XLS/XLSX、TXT/LOG。提交前允许移除选择，提交后不能追加、编辑或删除。文件位于服务端私有目录，数据库存元数据。附件读取继承工单的当前权限，Closed 的既有附件仍可读取。
 
-附件须遵守所属 Ticket 及消息的权限。数据库草案建议附件继承所属消息的 Public / Internal 可见性，避免内部备注附件泄露给 Employee。
-
-历史分工：
+处理历史分工：
 
 - TicketHistories：负责人、优先级、代理相关变化。
-- WorkflowHistory：Start Processing、Resolve、Close、Reopen 等步骤变化。
+- WorkflowHistory：Start Processing、Resolve、Close、Reopen 等步骤变化和说明。
 
-界面可以合并展示时间线，但同一次状态变化不需要在两处重复存储。Employee 的时间线不得暴露 Internal Note 内容或其附件。
+界面合并展示时间线，同一次状态变化不在两处重复存储。旧消息和其附件保留在数据库及存储中，但不再通过当前页面或接口提供；不删除历史 Migration。
 
-附件类型、大小、数量、存储位置，以及消息或附件能否编辑、删除，尚待确认。
+创建失败整体回滚并清理文件，超过 24 小时的无引用文件由后台核对清理。当前未接入病毒扫描。
 
 ## 8. Workflow Template 与 Instance
 
@@ -218,7 +211,7 @@ Actioner 至少需表达：
 
 只有 System Admin 可以管理和发布模板。可编辑步骤、动作、角色和备注要求的具体范围仍需确认；模板配置始终不能绕过工单可见性、Closed 终点及仅提交人确认等业务约束，System Admin 管理覆盖除外。
 
-阶段 3 已实现默认模板初始化及只读查看页。System Admin 在 Workflow 页首次初始化 `HELPDESK_TICKET` V1；重复调用保留现有启用模板，不覆盖版本或启用已停用配置。当前默认备注可选，引擎支持模板配置要求备注，单次备注最多 4000 字符；完整编辑入口保留到阶段 6。
+阶段 3 已实现默认模板初始化及只读查看页。System Admin 在 Workflow 页首次初始化 `HELPDESK_TICKET` V1；重复调用保留现有启用模板，不覆盖版本或启用已停用配置。阶段 5 起 Resolve / Reopen 备注必填，其他动作可按模板要求备注，单次备注最多 4000 字符；完整编辑入口保留到阶段 6。
 
 Workflow Engine 已实现实例复制、可用动作、权限和 History。执行动作时以当前用户身份和数据库当前负责人校验，通过 Ticket 行锁及流程 RowVersion 防止负责人竞争和重复提交。阶段 4 已由内部 Ticket 创建用例接入流程启动，在同一事务创建并完整回滚；前端按钮复用流程 API。
 
@@ -229,7 +222,7 @@ Workflow Engine 已实现实例复制、可用动作、权限和 History。执�
 3. Support Admin 分配后保持 Open；只有负责人或 System Admin 可执行 Start Processing。
 4. IT Staff Resolve 后，Employee 可以 Close，或 Reopen 至 In Progress。
 5. Closed Ticket 无法 Reopen，Employee 必须新建 Ticket。
-6. Employee 无法读取 Internal Note 或其内部附件；转派后旧 Staff 失去访问权限。
+6. 取消的消息 API 无法调用，旧消息附件不被当作提交附件暴露；转派后旧 Staff 失去附件访问权限。
 7. 代理开始交接全部 Open / In Progress，期间新分给 A 的 Ticket 自动路由给 B。
 8. 代理结束将本次代理的 Open / In Progress / Resolved 转回 A；Closed 和后续人工转派的 Ticket 保留。
 9. B 原有的 Ticket 不受 A 的代理结束影响，重复执行到期处理不重复转派。
@@ -241,10 +234,10 @@ Workflow Engine 已实现实例复制、可用动作、权限和 History。执�
 ## 10. 实现前仍需决定的事项
 
 - Identity 账号初始化、初始密码交付、修改和重置密码；JWT 的令牌存储、有效期、刷新、退出及停用后的会话处理。
-- 附件限制、存储方式和消息修改策略。
+- 生产附件持久卷、备份及恶意文件扫描部署。
 - 代理边界与调度方式，尤其是人员停用和重叠安排。
 - 工作流配置页的可编辑范围，以及哪些动作必须填写说明。
-- 附件相关字段和限额，以及模板和数据库的部署初始化方式；工单编号和核心表单长度已在阶段 4 确定。
+- 模板和数据库的部署初始化方式；附件限额已在阶段 5 确定，工单编号和核心表单长度已在阶段 4 确定。
 - UI 组件库、Dashboard、通知，以及 GitHub Actions 触发方式、镜像仓库、服务器和 SQL Server 部署位置等细节。
 
 这些事项不妨碍审核当前数据库草案，但涉及的实现不得把草案建议当作额外已批准业务功能。

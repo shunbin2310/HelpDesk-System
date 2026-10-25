@@ -141,6 +141,20 @@ dialog::backdrop { background: #15243d80; }
 .ticket-history .history-comment { white-space: pre-wrap; color: var(--text); }
 .section-divider { border: 0; border-top: 1px solid var(--border); margin: 28px 0 0; }
 .priority-save { margin-top: 18px; }
+.attachment-picker { margin-top: 24px; }
+.attachment-picker input[type=file] { padding: 12px; }
+.attachment-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.attachment-list li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border); border-left: 0; }
+.attachment-list li:last-child { padding-bottom: 12px; }
+.attachment-list li > span { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.attachment-list small { display: block; color: var(--muted); margin-top: 4px; }
+.file-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.file-error { color: #96312b; font-size: 14px; overflow-wrap: anywhere; }
+.file-error:empty { display: none; }
+.activity-timeline > li { padding-bottom: 28px; }
+.attachment-preview { width: min(900px, calc(100% - 32px)); }
+.attachment-preview h2 { overflow-wrap: anywhere; }
+.attachment-preview img { display: block; max-width: 100%; max-height: 60dvh; margin: 20px auto; object-fit: contain; }
 footer { padding: 24px; color: var(--muted); font-size: 12px; text-align: center; }
 .skip-link { position: fixed; z-index: 10; left: 16px; top: -100px; background: white; padding: 12px; }
 .skip-link:focus { top: 12px; }

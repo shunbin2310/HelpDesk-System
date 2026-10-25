@@ -123,7 +123,7 @@ Tickets 不另存可独立修改的 Status。列表和详情从 WorkflowProcessI
 
 AssignmentVersion 是技术方案建议，用于防止代理任务覆盖较新的人工分配，例如 A → B 后人工转 C，再人工转 B。单看当前负责人等于 B 不足以识别这些后续安排。
 
-### 4.3 TicketMessages
+### 4.3 TicketMessages（兼容保留，不提供业务入口）
 
 | 字段 | 建议类型 | 用途 |
 | --- | --- | --- |
@@ -134,7 +134,7 @@ AssignmentVersion 是技术方案建议，用于防止代理任务覆盖较新�
 | Body | nvarchar(max) | 消息内容 |
 | CreatedAtUtc | datetimeoffset(7) | 发送时间 |
 
-Employee 查询时必须过滤 InternalNote。消息编辑、删除及内容格式的具体策略待确认。
+2026-10-25 已取消 Public Reply / Internal Note。此表及枚举仅保留既有结构和数据，不提供消息 API 或 UI，也不修改历史 Migration。
 
 ### 4.4 Attachments
 
@@ -150,7 +150,7 @@ Employee 查询时必须过滤 InternalNote。消息编辑、删除及内容格�
 | SizeBytes | bigint | 文件大小 |
 | CreatedAtUtc | datetimeoffset(7) | 上传时间 |
 
-消息附件必须与消息属于同一 Ticket。附件权限继承 Ticket 和消息可见性，InternalNote 附件不能通过直接 URL 或附件接口被 Employee 读取。存储位置不作为授权依据，也不直接向客户端暴露内部文件路径。
+新附件仅在创建 Ticket 时写入，TicketMessageId 固定为空，读取按 Ticket 当前权限检查。旧消息附件关联和文件保留，但当前附件列表及下载接口均排除 TicketMessageId 非空的记录。存储位置不作为授权依据，不向客户端暴露内部路径。
 
 ### 4.5 TicketHistories
 
@@ -319,7 +319,7 @@ ActionInstance 是该 Ticket 的可用动作副本，WorkflowHistory 才是每�
 - WorkflowProcessInstance：TicketId 唯一；CurrentStepInstanceId、模板 FK 按查询和约束需要建索引。
 - WorkflowHistory：(ProcessInstanceId, ActionAtUtc, Id)。
 
-SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAction / Restrict 保护历史引用，第一版账号用停用代替物理删除。允许删除哪些草稿及附件的完整政策仍需另定。
+SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAction / Restrict 保护历史引用，第一版账号用停用代替物理删除。工单提交附件不可追加、编辑或删除；旧消息数据保留，模板草稿删除政策仍需另定。
 
 ## 10. 审核与验证清单
 
@@ -329,7 +329,7 @@ SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAc
 - 模板支持 Reopen 循环，版本副本隔离，配置不能绕过工单业务权限。
 - 代理开始不包含 Resolved，到期转回包含 Resolved；Closed 不转回。
 - 人工重新分配不会被到期任务覆盖；重复任务不生成重复交接或转回记录。
-- Public / Internal 消息及其附件的权限一致。
+- 新附件直接属于 Ticket；旧消息和其附件不通过当前业务接口暴露。
 - 当前步骤、动作、模板引用属于正确流程；业务修改与历史保存原子提交。
 
 ## 11. Migration 管理与启动更新
@@ -355,3 +355,5 @@ SQL Server 的多重级联删除路径需在 EF 配置时避免。建议以 NoAc
 | 2026-10-24 阶段 1 结果 | HelpDeskDb 已建立；22 张应用表及 EF 迁移历史，4 个角色，无默认账号 |
 
 该配置只针对本地 Windows 开发，不预设 Docker 或生产环境使用相同连接方式。已应用 InitialCreate、AddWorkflowInstanceSequence 和 FixCurrentStepOwnership。所有外键均启用并受信任；单角色唯一索引已验证。11 项单元测试、5 项 SQL Server 集成测试通过，无跳过；测试数据已回滚或清理，业务用户、工单和流程实例均为 0。
+
+阶段 5 简化版复用 Attachment 表，无 Migration；TicketMessages 及关联字段仅作兼容保留。文件存私有目录，随机 StorageKey，单批最多 5 个、单文件 10 MiB；附件元数据和工单写入同一事务。失败后只清理未被数据库引用的文件；后台每小时核对超过 24 小时的孤立文件，查询失败不删除，已提交的旧消息附件引用同样保留。

@@ -123,7 +123,7 @@ public sealed class TicketTests
         await using (var db = test.Context(new HistoryFailure()))
         {
             var current = new TestCurrentUser(test.Users["employee"]);
-            var service = new TicketService(db, current, new WorkflowEngine(db, current));
+            var service = new TicketService(db, current, new WorkflowEngine(db, current), test.Files(db));
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(new("Failure", "Rollback everything", TicketCategory.Other)));
         }
         await using (var db = test.Context())
@@ -149,7 +149,8 @@ public sealed class TicketTests
         (await client.GetFromJsonAsync<TicketPage>("/tickets" + (status is null ? "" : $"?status={status}")))!;
     private static async Task<TicketDetail> Read(HttpClient client, long id) => (await client.GetFromJsonAsync<TicketDetail>($"/tickets/{id}"))!;
     private static Task<HttpResponseMessage> Act(HttpClient client, TicketDetail detail, string code) =>
-        client.PostAsJsonAsync($"/tickets/{detail.Ticket.Id}/workflow/actions", new ExecuteWorkflowAction(code, detail.Workflow.RowVersion));
+        client.PostAsJsonAsync($"/tickets/{detail.Ticket.Id}/workflow/actions", new ExecuteWorkflowAction(code, detail.Workflow.RowVersion,
+            code is TicketWorkflow.Resolve or TicketWorkflow.Reopen ? "Integration test comment" : null));
 
     private sealed class HistoryFailure : SaveChangesInterceptor
     {

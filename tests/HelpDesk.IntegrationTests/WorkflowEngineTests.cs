@@ -109,6 +109,11 @@ public sealed class WorkflowEngineTests
     public async Task CopiedVersionsSurviveTemplateChangesAndNewInstancesHonorCommentsAndRejectInvalidGraphs()
     {
         await using var test = new WorkflowTestDatabase(); await test.InitializeAsync(); await Setup(test);
+        await using (var legacy = test.Context())
+        {
+            foreach (var item in await legacy.WorkflowActionTemplates.ToListAsync()) item.RequiresComment = false;
+            await legacy.SaveChangesAsync();
+        }
         var first = await test.AddTicketAsync(); await Start(test, first);
         await PublishV2(test);
         using var admin = await test.ClientAsync("admin");
@@ -120,8 +125,19 @@ public sealed class WorkflowEngineTests
         var v1 = await Read(staff, first); var v2 = await Read(staff, second);
         Assert.Equal(1, v1.TemplateVersion); Assert.Equal(2, v2.TemplateVersion);
         v1 = await Success(await Act(staff, first, v1, TicketWorkflow.StartProcessing));
-        Assert.False(Assert.Single(v1.AvailableActions).RequiresComment);
-        (await Act(staff, first, v1, TicketWorkflow.Resolve)).EnsureSuccessStatusCode();
+        Assert.True(Assert.Single(v1.AvailableActions).RequiresComment);
+        await using (var copied = test.Context())
+            Assert.False(await copied.WorkflowActionInstances.Where(x => x.ProcessInstanceId == v1.Id && x.Code == TicketWorkflow.Resolve).Select(x => x.RequiresComment).SingleAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Act(staff, first, v1, TicketWorkflow.Resolve, " ")).StatusCode);
+        v1 = await Success(await Act(staff, first, v1, TicketWorkflow.Resolve));
+        using (var legacyEmployee = await test.ClientAsync("employee"))
+        {
+            Assert.Empty(v1.AvailableActions);
+            var legacyState = await Read(legacyEmployee, first);
+            Assert.True(legacyState.AvailableActions.Single(x => x.Code == TicketWorkflow.Reopen).RequiresComment);
+            Assert.Equal(HttpStatusCode.BadRequest, (await legacyEmployee.PostAsJsonAsync($"/tickets/{first}/workflow/actions",
+                new ExecuteWorkflowAction(TicketWorkflow.Reopen, legacyState.RowVersion))).StatusCode);
+        }
         v2 = await Success(await Act(staff, second, v2, TicketWorkflow.StartProcessing));
         Assert.True(Assert.Single(v2.AvailableActions).RequiresComment);
         Assert.Equal(HttpStatusCode.BadRequest, (await Act(staff, second, v2, TicketWorkflow.Resolve, "  ")).StatusCode);
@@ -201,7 +217,8 @@ public sealed class WorkflowEngineTests
     { await using var db = test.Context(); Assert.Equal(WorkflowResultStatus.Success, (await Engine(db, test, "employee").StartAsync(ticket)).Status); }
     private static async Task<WorkflowSnapshot> Read(HttpClient client, long id) => (await client.GetFromJsonAsync<WorkflowSnapshot>($"/tickets/{id}/workflow"))!;
     private static Task<HttpResponseMessage> Act(HttpClient client, long id, WorkflowSnapshot state, string action, string? comment = null) =>
-        client.PostAsJsonAsync($"/tickets/{id}/workflow/actions", new ExecuteWorkflowAction(action, state.RowVersion, comment));
+        client.PostAsJsonAsync($"/tickets/{id}/workflow/actions", new ExecuteWorkflowAction(action, state.RowVersion,
+            comment ?? (action is TicketWorkflow.Resolve or TicketWorkflow.Reopen ? "Integration test comment" : null)));
     private static async Task<WorkflowSnapshot> Success(HttpResponseMessage response)
     { response.EnsureSuccessStatusCode(); return (await response.Content.ReadFromJsonAsync<WorkflowSnapshot>())!; }
 
