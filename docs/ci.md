@@ -1,6 +1,6 @@
 # GitHub Actions CI
 
-配置文件为 `.github/workflows/ci.yml`。每次 Push、Pull Request 和手动 Run workflow 都执行验证；同一 ref 的新运行会取消旧运行。本轮不推送 Docker 镜像，也不执行服务器部署。
+配置文件为 `.github/workflows/ci.yml`。每次 Push、Pull Request 和手动 Run workflow 都执行验证；其他分支 / PR 的新运行取消旧运行，main 正在执行的运行不自动取消。原仓库 main Push 全部检查通过后，新增 GHCR 发布 Job；本流程不执行服务器部署。镜像及本机拉取方式见[GHCR 说明](ghcr.md)。
 
 ## 检查内容
 
@@ -9,6 +9,7 @@
 | Backend tests and migrations | .NET 10 restore / build、EF 模型与 Snapshot 一致性、空库 Migration、单元测试及 SQL Server 集成测试 |
 | Frontend checks and build | Node.js 24、npm ci、Prettier 检查、vue-tsc 类型检查及 Vite 生产构建 |
 | Build Docker images | 等后端和前端都通过，再使用已有 Dockerfile 构建 API / Web 镜像 |
+| Publish GHCR images | 仅原仓库 main Push，等待 images 成功后发布两个 Commit SHA 版本的 GHCR 镜像；PR / 手动运行跳过 |
 
 SQL Server 2022 使用固定镜像 digest，在 GitHub-hosted Ubuntu 24.04 Runner 的临时容器内运行。健康检查通过后才执行步骤；先在 HelpDeskCi 应用 Migration，因为部分现有数据库约束及账号存储测试需要已初始化的库。其余流程和账号测试继续创建自己的随机测试库并清理。
 
@@ -22,13 +23,13 @@ SQL Server 2022 使用固定镜像 digest，在 GitHub-hosted Ubuntu 24.04 Runne
 
 后端步骤失败时输出临时 SQL Server 日志；测试报告尽可能作为 `backend-test-results` Artifact 保存 7 天。任何前置检查失败，Docker 构建 Job 就不执行。
 
-Workflow 的权限只有 `contents: read`，Checkout 不保留 Git 凭据。官方 Actions 固定到已核对的 commit SHA；没有镜像仓库登录、`packages: write`、SSH、Push 镜像或调用本机 Compose 的步骤。PR 使用普通 `pull_request`，不使用 `pull_request_target`。
+原三个检查 Job 的权限只有 `contents: read`，Checkout 不保留 Git 凭据。新增的 main Push 发布 Job 单独使用 `packages: write` 和内置 `GITHUB_TOKEN` 登录 GHCR。官方 Actions 固定到已核对的 commit SHA；没有 SSH、服务器部署或调用本机 Compose 的步骤。PR 使用普通 `pull_request`，不使用 `pull_request_target`。
 
 ## 提交后查看
 
-将 Workflow 及本轮相关文档提交并 Push 到 GitHub 后，进入仓库 **Actions → HelpDesk CI** 查看三个 Job。修复失败并再次 Push，会触发新的检查。手动 **Run workflow** 入口需要 Workflow 已存在于默认分支。
+进入仓库 **Actions → HelpDesk CI** 查看 Job。PR / 功能分支的原三个检查运行，发布 Job 跳过；main Push 会在检查通过后继续发布。修复失败并再次 Push，会触发新的检查。手动 **Run workflow** 入口需要 Workflow 已存在于默认分支，手动运行只验证，不发布。
 
-若以后将 CI 作为合并条件，再到 GitHub 的 Branch protection / Rulesets 中设置 required checks；本轮没有修改远端仓库规则。
+用户已配置 main Ruleset，原三个 required check 名称保持不变；发布 Job 不需要添加为 PR 必需检查。本轮没有修改远端仓库规则。
 
 ## 本地验证结果（2026-10-25）
 
@@ -40,6 +41,6 @@ Workflow 的权限只有 `contents: read`，Checkout 不保留 Git 凭据。官�
 - 使用真实 TRX 验证报告检查通过，并确认它会拒绝 skipped、failed、empty、missing 和 missing-counters 五类报告。
 - Linux TRX 结果保留在本机 Git 忽略的 `artifacts/ci-validation/` 下。临时验证容器、网络和源码副本在完成后清理。
 
-以上属于本地 Linux 等效验证；尚未提交或推送本次修改，GitHub Runner 的首次真实运行仍需在 Push 后确认。没有把本地通过当作远端已通过。
+以上是初版 CI 的本地 Linux 等效验证。其后用户提供 PR #6 的 GitHub 截图，确认 Push 和 Pull Request 的三项检查均成功，并已合并到 main。新增 GHCR 发布功能仍需在本轮 Workflow 合并后验证首次远端上传与本机拉取，不能将本地构建当作已发布。
 
 参考：[actions/setup-dotnet](https://github.com/actions/setup-dotnet)、[actions/setup-node](https://github.com/actions/setup-node)、[actionlint 使用说明](https://github.com/rhysd/actionlint/blob/main/docs/usage.md)。

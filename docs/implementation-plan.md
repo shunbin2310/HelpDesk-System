@@ -294,14 +294,15 @@ Employee Close → Closed
 
 技术方向已确定为 GitHub、GitHub Actions、Docker。服务器、镜像仓库、触发分支、自动部署条件及 SQL Server 部署位置待确认后展开，不沿用其他仓库的环境配置。
 
-2026-10-25 用户确认先做本机 Docker 测试。新增前后端多阶段 Dockerfile、Nginx 同源 API 转发、compose.local.yml、本机环境示例及运行说明；使用独立 SQL Server 和数据库 / 附件 / Data Protection 持久化卷。后续已加入 GitHub Actions CI 验证配置；镜像发布、服务器部署和 HTTPS 仍未实施。具体命令与验证见[本机 Docker 说明](docker-local.md)。
+2026-10-25 用户确认先做本机 Docker 测试。新增前后端多阶段 Dockerfile、Nginx 同源 API 转发、compose.local.yml、本机环境示例及运行说明；使用独立 SQL Server 和数据库 / 附件 / Data Protection 持久化卷。后续 CI 已通过 PR #6 远端检查，并加入 GHCR 发布配置；首次 GHCR 上传 / 拉取仍待本轮合并后的运行验证，服务器部署和 HTTPS 仍未实施。具体命令与验证见[本机 Docker 说明](docker-local.md)。
 
 后续用户明确选择 Docker 连接 Windows 现有 BIN / HelpDeskDb，并批准专用 SQL 登录 helpdesk_docker_local 仅在此库获得 db_owner，以支持启动 Migration。增加 compose.host-sql.yml 和私有环境文件示例，现有 Windows 附件目录绑定到 API；原独立 Docker SQL 数据及文件卷保留。实际运行方式和命令见[本机数据库连接说明](docker-host-sql.md)。
 
 - [ ] 确认服务器、SQL Server 所在位置、域名及 HTTPS 方案。
 - [x] 编写前后端独立的多阶段 Dockerfile 和本机 Docker Compose 配置，沿用现有 Solution 分层；服务器编排在选定目标后再配置。
-- [x] 建立 GitHub Actions CI Workflow：后端构建与测试、前端格式 / 类型检查与构建、Migration 模型检查通过后，再验证两个 Docker 镜像构建；本地 Linux 验证通过，远端首次运行待 Push 后确认。
-- [ ] 确认镜像仓库后增加通过检查才推送镜像的步骤。
+- [x] 建立 GitHub Actions CI Workflow：后端构建与测试、前端格式 / 类型检查与构建、Migration 模型检查通过后，再验证两个 Docker 镜像构建；本地 Linux 及 PR #6 的远端检查通过。
+- [x] 确认 GHCR，增加仅原仓库 main Push 检查通过才发布两个 Commit SHA 镜像的步骤。
+- [ ] 验证首次 GHCR 上传成功，以及本机从 Registry 拉取运行同一 main SHA 的两个镜像。
 - [ ] 确认镜像仓库、部署触发方式、反向代理和目标环境，并实现对应 CD 步骤。
 - [ ] 配置生产前端与 API 路由；开发 Vite 代理不能直接作为生产部署方案。
 - [ ] 配置生产凭据、首个管理员、附件持久化、日志及后台代理任务运行方式。
@@ -312,7 +313,9 @@ Employee Close → Closed
 
 具体服务器、资源费用和自动化配置在本阶段开始前另行决定。
 
-CI 实施结果（2026-10-25）：新增 .github/workflows/ci.yml，使用官方 Actions 的固定 commit SHA、只读仓库权限及独立 SQL Server 临时服务。测试报告检查拒绝空结果或 Skipped，两个镜像构建依赖前置 Job 成功。actionlint、本地 Linux 构建、66 项单元测试、32 项 SQL 集成测试、模型一致性检查、前端检查及两个镜像构建通过；报告检查的五类失败输入均被拒绝。尚未提交 / 推送，也未声称 GitHub Runner 已实际通过。具体范围见[CI 说明](ci.md)。
+CI 实施结果（2026-10-25）：新增 .github/workflows/ci.yml，使用官方 Actions 的固定 commit SHA、只读检查权限及独立 SQL Server 临时服务。测试报告检查拒绝空结果或 Skipped，两个镜像构建依赖前置 Job 成功。actionlint、本地 Linux 构建、66 项单元测试、32 项 SQL 集成测试、模型一致性检查、前端检查及两个镜像构建通过；报告检查的五类失败输入均被拒绝。其后用户提供截图确认 PR #6 的 Push / Pull Request 三项检查全部通过，并已合并 main。具体范围见[CI 说明](ci.md)。
+
+GHCR 配置（2026-10-25）：原三个检查名和 PR 只读权限保持不变，新增独立发布 Job，仅原仓库 main Push 才能发布，只有此 Job 使用 packages: write 和自动 GITHUB_TOKEN；不修改包可见性，不增加服务器部署。compose.ghcr.yml 覆盖两个镜像引用，配合 --no-build --pull always 拉取发布版本，沿用既有 host SQL 和附件挂载。actionlint、六种发布条件、并发取消条件、候选镜像构建 / 标签及 Compose 配置校验通过。实际上传 / 本机拉取需本轮合并后验收，命令见[GHCR 说明](ghcr.md)。
 
 ## 13. 每个阶段的工作方式
 
@@ -322,7 +325,7 @@ CI 实施结果（2026-10-25）：新增 .github/workflows/ci.yml，使用官方
 4. 用中文交付：修改文件、关键变化、可测试步骤、验证结果和剩余限制。
 5. 完成验收后更新本计划的状态及相关文档，不提前勾选未完成项目。
 
-当前已完成账号、固定 Workflow、Ticket、提交附件、Delegation、本机 Docker 及 CI 验证配置，用户已确认阶段 8 验收完成。下一步先确认 Push 后的 GitHub CI 运行，再决定镜像发布及服务器部署；阶段 6 模板编辑器继续暂缓。
+当前已完成账号、固定 Workflow、Ticket、提交附件、Delegation、本机 Docker，阶段 8 和远端 CI 已验收；本轮已增加 GHCR 发布配置，下一步验证 main 的首次上传及本机拉取，再决定服务器部署。阶段 6 模板编辑器继续暂缓。
 
 ## 14. Project1 功能参考清单
 
@@ -464,10 +467,10 @@ PR 检查不直接修改部署数据库。发布条件、分支、Tag、环境�
 
 ### 16.3 保持独立的配置
 
-- GitHub Actions 和 Docker 是已确定方向；GHCR、其他镜像仓库、Ubuntu、其他服务器或云环境尚未选择。
+- GitHub Actions、Docker 和 GHCR 已确认；Ubuntu、其他服务器或云环境及 CD 条件仍待后续选择。
 - SQL Server 位于宿主机还是容器中，数据库及附件的持久化位置，需按实际环境决定。
 - Dockerfile 和代理配置必须使用 Helpdesk 的项目路径、启动端口及 API 路由，不能直接带入公司的路径或地址。
 - 不复制公司的账号、证书、服务连接、镜像地址、数据库凭据、AWS 配置或 Azure Pipelines 环境值。
 - 后续配置如与 Project1 不同，以 Helpdesk 已确认的需求和部署环境为准。
 
-本节记录参考关系和实施方向。2026-10-25 已增加本机 Dockerfile / Compose 和 GitHub Actions CI Workflow；镜像发布及服务器部署资源仍未创建。
+本节记录参考关系和实施方向。2026-10-25 已增加本机 Dockerfile / Compose、GitHub Actions CI 及 GHCR 发布配置；首次远端上传仍待验证，服务器部署资源尚未创建。

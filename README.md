@@ -255,9 +255,9 @@ SQL Server 测试使用事务回滚或针对性清理移除自己创建的记录
 
 ## GitHub Actions CI
 
-[HelpDesk CI](.github/workflows/ci.yml) 在 Push / Pull Request / 手动触发时检查后端、SQL 集成测试、Migration、前端，并在检查通过后构建两个 Docker 镜像。SQL 使用 Runner 内的临时容器，不连接本机数据库；缺少测试结果或出现 Skipped 会失败。测试 TRX 保存 7 天。
+[HelpDesk CI](.github/workflows/ci.yml) 在 Push / Pull Request / 手动触发时检查后端、SQL 集成测试、Migration、前端，并在检查通过后构建两个 Docker 镜像。SQL 使用 Runner 内的临时容器，不连接本机数据库；缺少测试结果或出现 Skipped 会失败。测试 TRX 保存 7 天。原仓库 main Push 通过后发布两个 GHCR Commit SHA 版本镜像，PR 和手动运行只验证。
 
-本轮已通过本地 Linux 等效验证，首次 GitHub Runner 运行需提交并 Push 后确认。镜像发布和服务器部署留在后续阶段；详情见[CI 说明](docs/ci.md)。
+初版 CI 已通过本地 Linux 等效验证和 PR #6 的远端运行。GHCR 发布配置已增加，本轮合并后仍需验证首次上传和本机拉取；服务器部署留在后续阶段。详情见[CI 说明](docs/ci.md)和[GHCR 发布与本机验证](docs/ghcr.md)。
 
 ## 构建
 
@@ -304,6 +304,6 @@ Prettier 仅为开发依赖，不改变应用运行逻辑。`.gitattributes` 固
 - [需求说明](docs/requirements.md)
 - [数据库设计草案](docs/database-design.md)
 
-当前已完成阶段 5。默认流程仍由 System Admin 在 Workflow 页首次初始化，现有账号不受影响。Delegation 已完成；Workflow Template 编辑器按用户保持简单的方向暂缓，后续先进行整体验收。
+当前核心工单、附件、Delegation、本机 Docker 和 CI 已完成，阶段 8 已由用户验收。新增 GHCR 发布配置，首次上传及本机拉取需本轮合并 main 后验证；Workflow Template 编辑器按用户保持简单的方向继续暂缓。
 
 JWT 验证遵循 [ASP.NET Core Bearer 文档](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0)，前端权限导航使用 [Vue Router guards](https://router.vuejs.org/guide/advanced/navigation-guards)。界面导航只提供交互限制，实际权限由 API Bearer 验证和角色授权执行。

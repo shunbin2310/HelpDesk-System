@@ -48,7 +48,7 @@ Api 引用 Application 和 Infrastructure；Application 引用 Domain；Infrastr
 
 以上是参考公司项目后的组织方式。当前已建立四个 .NET 项目、Vue Web、UnitTests 和 IntegrationTests，并完成阶段 1 数据基础。启动和测试方式见 [README](../README.md)。
 
-Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；每次启动 API 时，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 不再提供启动迁移开关；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。阶段 1 已实现并验证启动迁移；GitHub Actions CI 已配置模型检查和独立 SQL 测试，远端首次执行需提交并 Push 后确认，详见[CI 说明](ci.md)。
+Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；每次启动 API 时，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 不再提供启动迁移开关；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。GitHub Actions CI 已配置模型检查和独立 SQL 测试，并在 PR #6 通过远端检查；新增 GHCR 发布配置仅在原仓库 main Push 检查通过后执行，首次上传与本机拉取仍待验收，详见[CI 说明](ci.md)及[GHCR 说明](ghcr.md)。
 
 ## 2. 用户与角色
 

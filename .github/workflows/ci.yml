@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -162,3 +162,58 @@ jobs:
 
       - name: Build Web image
         run: docker build --tag helpdesk-web:ci src/HelpDesk.Web
+
+  publish:
+    name: Publish GHCR images
+    needs: images
+    if: github.repository == 'shunbin2310/HelpDesk-System' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      API_IMAGE: ghcr.io/shunbin2310/helpdesk-api:${{ github.sha }}
+      WEB_IMAGE: ghcr.io/shunbin2310/helpdesk-web:${{ github.sha }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Sign in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build versioned API image
+        run: >-
+          docker build --file src/HelpDesk.Api/Dockerfile --tag "$API_IMAGE"
+          --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          --label "org.opencontainers.image.revision=$GITHUB_SHA" .
+
+      - name: Build versioned Web image
+        run: >-
+          docker build --tag "$WEB_IMAGE"
+          --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          --label "org.opencontainers.image.revision=$GITHUB_SHA" src/HelpDesk.Web
+
+      - name: Push API image
+        run: docker push "$API_IMAGE"
+
+      - name: Push Web image
+        run: docker push "$WEB_IMAGE"
+
+      - name: Record published version
+        run: |
+          {
+            echo '## Published GHCR images'
+            printf -- '- API: %s\n' "$API_IMAGE"
+            printf -- '- Web: %s\n' "$WEB_IMAGE"
+            printf -- '\nSource commit: %s\n' "$GITHUB_SHA"
+            echo 'Use this version only after both pushes have succeeded.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sign out of GHCR
+        if: always()
+        run: docker logout ghcr.io

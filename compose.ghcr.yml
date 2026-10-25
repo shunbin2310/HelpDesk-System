@@ -1,0 +1,6 @@
+# Apply after compose.host-sql.yml; use up --no-build --pull always.
+services:
+  api:
+    image: ghcr.io/shunbin2310/helpdesk-api:${HELPDESK_IMAGE_TAG:?Set HELPDESK_IMAGE_TAG to the published commit SHA}
+  web:
+    image: ghcr.io/shunbin2310/helpdesk-web:${HELPDESK_IMAGE_TAG:?Set HELPDESK_IMAGE_TAG to the published commit SHA}
