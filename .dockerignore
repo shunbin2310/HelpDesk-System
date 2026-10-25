@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+.vs
+.vscode
+.env*
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/*.log
+docs
+tests
