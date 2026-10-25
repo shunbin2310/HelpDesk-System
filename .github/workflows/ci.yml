@@ -1,0 +1,164 @@
+name: HelpDesk CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests and migrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      sqlserver:
+        # SQL Server 2022, verified locally. Credentials are disposable CI values.
+        image: mcr.microsoft.com/mssql/server@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_PID: Developer
+          MSSQL_SA_PASSWORD: HelpDeskCiOnly!2026
+          MSSQL_MEMORY_LIMIT_MB: 2048
+        ports:
+          - 127.0.0.1:1433:1433
+        options: >-
+          --memory 3g
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'HelpDeskCiOnly!2026' -C -b -l 5 -Q 'SELECT 1' -o /dev/null"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 18
+          --health-start-period 30s
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      DOTNET_ENVIRONMENT: CI
+      ASPNETCORE_ENVIRONMENT: CI
+      HELPDESK_TEST_CONNECTION: Server=tcp:127.0.0.1,1433;Database=HelpDeskCi;User Id=sa;Password=HelpDeskCiOnly!2026;Encrypt=True;TrustServerCertificate=True
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies and EF CLI
+        run: |
+          dotnet restore HelpDesk.slnx
+          dotnet tool restore
+
+      - name: Build backend
+        run: dotnet build HelpDesk.slnx --configuration Release --no-restore
+
+      - name: Check model has a migration
+        env:
+          # Design-time Factory only; this unreachable address must not be contacted.
+          ConnectionStrings__DefaultConnection: Server=tcp:127.0.0.1,1;Database=HelpDeskCiModelCheck;User Id=unused;Password=unused;Connect Timeout=1
+        run: >-
+          dotnet tool run dotnet-ef -- migrations has-pending-model-changes
+          --project src/HelpDesk.Infrastructure --startup-project src/HelpDesk.Api
+          --context HelpDeskDbContext --configuration Release --no-build
+
+      - name: Initialize disposable CI database
+        env:
+          ConnectionStrings__DefaultConnection: ${{ env.HELPDESK_TEST_CONNECTION }}
+        run: >-
+          dotnet tool run dotnet-ef -- database update
+          --project src/HelpDesk.Infrastructure --startup-project src/HelpDesk.Api
+          --context HelpDeskDbContext --configuration Release --no-build
+
+      - name: Run unit tests
+        run: >-
+          dotnet test tests/HelpDesk.UnitTests --configuration Release --no-build --no-restore
+          --logger "trx;LogFileName=unit.trx" --results-directory artifacts/test-results/unit
+
+      - name: Run SQL Server integration tests
+        run: >-
+          dotnet test tests/HelpDesk.IntegrationTests --configuration Release --no-build --no-restore
+          --logger "trx;LogFileName=integration.trx" --results-directory artifacts/test-results/integration
+
+      - name: Reject empty or skipped test runs
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          for suite in ("unit", "integration"):
+              path = Path(f"artifacts/test-results/{suite}/{suite}.trx")
+              counters = ET.parse(path).find(".//{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}Counters")
+              assert counters is not None, f"Missing test counters: {path}"
+              total = int(counters.attrib["total"])
+              assert total > 0, f"No tests ran: {path}"
+              assert int(counters.attrib["executed"]) == total, f"Tests skipped: {path}"
+              assert int(counters.attrib["passed"]) == total, f"Tests did not all pass: {path}"
+              print(f"{suite}: {total} tests passed, none skipped")
+          PY
+
+      - name: Show SQL Server logs on failure
+        if: failure()
+        run: docker logs "${{ job.services.sqlserver.id }}"
+
+      - name: Save test results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: backend-test-results
+          path: artifacts/test-results/**/*.trx
+          if-no-files-found: warn
+          retention-days: 7
+
+  frontend:
+    name: Frontend checks and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: src/HelpDesk.Web
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/HelpDesk.Web/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Type-check and build
+        run: npm run build
+
+  images:
+    name: Build Docker images
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Build API image
+        run: docker build --file src/HelpDesk.Api/Dockerfile --tag helpdesk-api:ci .
+
+      - name: Build Web image
+        run: docker build --tag helpdesk-web:ci src/HelpDesk.Web
