@@ -15,5 +15,8 @@ public interface IAuthenticationService
 
 public interface ICurrentUserContext
 {
-    int UserId { get; }
+    int UserId
+    {
+        get;
+    }
 }

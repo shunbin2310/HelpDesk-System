@@ -9,16 +9,18 @@ public sealed class StartupDatabaseMigratorTests
     private static StartupDatabaseMigrator Runner(FakeDatabase database, DatabaseMigrationOptions? options = null) =>
         new(database, Options.Create(options ?? new DatabaseMigrationOptions
         {
-            MigrateOnStartup = true, ExpectedDatabase = "HelpDeskTest"
+            ExpectedDatabase = "HelpDeskTest"
         }), NullLogger<StartupDatabaseMigrator>.Instance);
 
     [Fact]
-    public async Task DisabledDoesNotAccessDatabase()
+    public async Task EveryStartupChecksPendingMigrations()
     {
         var database = new FakeDatabase();
-        await Runner(database, new()).ApplyAsync();
-        Assert.Equal(0, database.NameReads);
-        Assert.Equal(0, database.PendingReads);
+        var runner = Runner(database);
+        await runner.ApplyAsync();
+        await runner.ApplyAsync();
+        Assert.Equal(2, database.NameReads);
+        Assert.Equal(2, database.PendingReads);
         Assert.Equal(0, database.Migrations);
     }
 
@@ -59,7 +61,8 @@ public sealed class StartupDatabaseMigratorTests
         var database = new FakeDatabase();
         await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(database, new()
         {
-            MigrateOnStartup = true, ExpectedDatabase = expectedDatabase, CommandTimeoutSeconds = timeout
+            ExpectedDatabase = expectedDatabase,
+            CommandTimeoutSeconds = timeout
         }).ApplyAsync());
         Assert.Equal(0, database.NameReads);
     }
@@ -71,7 +74,9 @@ public sealed class StartupDatabaseMigratorTests
     {
         var database = new FakeDatabase
         {
-            Pending = ["InitialCreate"], FailQuery = !duringMigration, FailMigration = duringMigration
+            Pending = ["InitialCreate"],
+            FailQuery = !duringMigration,
+            FailMigration = duringMigration
         };
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(database).ApplyAsync());
         Assert.Contains("API was not started", error.Message);
@@ -93,18 +98,44 @@ public sealed class StartupDatabaseMigratorTests
     {
         public string Name { get; init; } = "HelpDeskTest";
         public IReadOnlyList<string> Pending { get; init; } = [];
-        public bool FailQuery { get; init; }
-        public bool FailMigration { get; init; }
-        public int NameReads { get; private set; }
-        public int PendingReads { get; private set; }
-        public int Migrations { get; private set; }
-        public int Timeout { get; private set; }
-        public string DatabaseName { get { NameReads++; return Name; } }
+        public bool FailQuery
+        {
+            get; init;
+        }
+        public bool FailMigration
+        {
+            get; init;
+        }
+        public int NameReads
+        {
+            get; private set;
+        }
+        public int PendingReads
+        {
+            get; private set;
+        }
+        public int Migrations
+        {
+            get; private set;
+        }
+        public int Timeout
+        {
+            get; private set;
+        }
+        public string DatabaseName
+        {
+            get
+            {
+                NameReads++;
+                return Name;
+            }
+        }
 
         public Task<IReadOnlyList<string>> GetPendingAsync(CancellationToken cancellationToken)
         {
             PendingReads++;
-            if (FailQuery) throw new InvalidOperationException("private database detail");
+            if (FailQuery)
+                throw new InvalidOperationException("private database detail");
             return Task.FromResult(Pending);
         }
 
@@ -112,7 +143,8 @@ public sealed class StartupDatabaseMigratorTests
         {
             Migrations++;
             Timeout = commandTimeoutSeconds;
-            if (FailMigration) throw new InvalidOperationException("private database detail");
+            if (FailMigration)
+                throw new InvalidOperationException("private database detail");
             return Task.CompletedTask;
         }
     }

@@ -65,10 +65,13 @@ internal static class TicketMappings
         delegation.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.SourceUserId);
         delegation.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.TargetUserId);
         delegation.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.CreatedByUserId);
+        delegation.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.StoppedByUserId);
         delegation.ToTable("Delegations", t =>
         {
             t.HasCheckConstraint("CK_Delegations_DifferentUsers", "[SourceUserId] <> [TargetUserId]");
             t.HasCheckConstraint("CK_Delegations_Period", "[StartsAtUtc] < [EndsAtUtc]");
+            t.HasCheckConstraint("CK_Delegations_StopAudit",
+                "([StoppedAtUtc] IS NULL AND [StoppedByUserId] IS NULL) OR ([StoppedAtUtc] IS NOT NULL AND [StoppedByUserId] IS NOT NULL)");
         });
 
         var delegated = Entity<DelegationTicket>(builder, "DelegationTickets");

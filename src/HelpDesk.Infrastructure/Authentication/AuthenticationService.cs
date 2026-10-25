@@ -14,11 +14,14 @@ public sealed class AuthenticationService(UserManager<ApplicationUser> users, Si
     public async Task<LoginResponse?> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || request.Email.Length > 256
-            || string.IsNullOrEmpty(request.Password) || request.Password.Length > 128) return null;
+            || string.IsNullOrEmpty(request.Password) || request.Password.Length > 128)
+            return null;
         var user = await users.FindByEmailAsync(request.Email.Trim());
-        if (user is null || !user.IsActive) return null;
+        if (user is null || !user.IsActive)
+            return null;
         var check = await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
-        if (!check.Succeeded) return null;
+        if (!check.Succeeded)
+            return null;
         var account = await GetUserAsync(user.Id, cancellationToken);
         return account is null ? null : tokens.Create(account, user.SecurityStamp!);
     }
@@ -38,7 +41,8 @@ public sealed class AuthenticationService(UserManager<ApplicationUser> users, Si
             return new(null, ["Passwords are required and must be at most 128 characters."]);
         cancellationToken.ThrowIfCancellationRequested();
         var user = await users.FindByIdAsync(userId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (user is null || !user.IsActive) return new(null, ["User is unavailable."]);
+        if (user is null || !user.IsActive)
+            return new(null, ["User is unavailable."]);
         var result = await users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
         return result.Succeeded ? new(userId, []) : new(null, result.Errors.Select(x => x.Description).ToArray());
     }

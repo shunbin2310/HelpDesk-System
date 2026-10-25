@@ -5,10 +5,22 @@ namespace HelpDesk.Domain.Entities.Workflows;
 
 public sealed class WorkflowStepTemplate : Entity
 {
-    public long ProcessTemplateId { get; set; }
+    public long ProcessTemplateId
+    {
+        get; set;
+    }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public int DisplayOrder { get; set; }
-    public bool IsInitial { get; set; }
-    public bool IsTerminal { get; set; }
+    public int DisplayOrder
+    {
+        get; set;
+    }
+    public bool IsInitial
+    {
+        get; set;
+    }
+    public bool IsTerminal
+    {
+        get; set;
+    }
 }

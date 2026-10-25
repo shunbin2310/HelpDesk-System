@@ -20,12 +20,17 @@ public sealed class TicketAttachmentService(HelpDeskDbContext db, ICurrentUserCo
 
     public async Task<TicketResult<AttachmentDownload>> DownloadAsync(long ticketId, long attachmentId, CancellationToken cancellationToken = default)
     {
-        if (!await CanViewAsync(ticketId, cancellationToken)) return MissingFile();
+        if (!await CanViewAsync(ticketId, cancellationToken))
+            return MissingFile();
         // Retired message attachments stay in storage, but are not exposed as submission attachments.
         var attachment = await db.Attachments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == attachmentId
             && x.TicketId == ticketId && x.TicketMessageId == null, cancellationToken);
-        if (attachment is null) return MissingFile();
-        try { return new(TicketResultStatus.Success, new(store.OpenRead(attachment.StorageKey), attachment.OriginalFileName, attachment.ContentType)); }
+        if (attachment is null)
+            return MissingFile();
+        try
+        {
+            return new(TicketResultStatus.Success, new(store.OpenRead(attachment.StorageKey), attachment.OriginalFileName, attachment.ContentType));
+        }
         catch (FileNotFoundException) { return MissingFile(); }
         catch (DirectoryNotFoundException) { return MissingFile(); }
     }

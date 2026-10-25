@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using HelpDesk.Infrastructure.Attachments;
+using HelpDesk.Infrastructure.Delegations;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -19,13 +20,18 @@ internal sealed class WorkflowTestDatabase : IAsyncDisposable
 {
     private readonly string databaseName = $"HelpDeskWorkflowTests_{Guid.NewGuid():N}";
     private readonly string connection;
-    public HelpDeskTestFactory Factory { get; }
+    public HelpDeskTestFactory Factory
+    {
+        get;
+    }
     public Dictionary<string, int> Users { get; } = [];
 
     public WorkflowTestDatabase()
     {
         connection = new SqlConnectionStringBuilder(Environment.GetEnvironmentVariable("HELPDESK_TEST_CONNECTION"))
-        { InitialCatalog = databaseName }.ConnectionString;
+        {
+            InitialCatalog = databaseName
+        }.ConnectionString;
         Factory = new(connection);
     }
 
@@ -34,6 +40,7 @@ internal sealed class WorkflowTestDatabase : IAsyncDisposable
 
     public FileAttachmentStore Store() => new(Options.Create(new AttachmentStorageOptions { RootPath = Factory.AttachmentRoot }), NullLogger<FileAttachmentStore>.Instance);
     public TicketAttachmentWriter Files(HelpDeskDbContext db) => new(db, Store(), NullLogger<TicketAttachmentWriter>.Instance);
+    public DelegationProcessor Processor(HelpDeskDbContext db) => new(db, Factory.Clock, NullLogger<DelegationProcessor>.Instance);
 
     public async Task InitializeAsync()
     {
@@ -54,7 +61,11 @@ internal sealed class WorkflowTestDatabase : IAsyncDisposable
     public async Task<HttpClient> ClientAsync(string name)
     {
         var client = Factory.CreateClient();
-        var result = await client.PostAsJsonAsync("/auth/login", new { email = $"{name}@example.invalid", password = "Integration-only!42" });
+        var result = await client.PostAsJsonAsync("/auth/login", new
+        {
+            email = $"{name}@example.invalid",
+            password = "Integration-only!42"
+        });
         result.EnsureSuccessStatusCode();
         var login = (await result.Content.ReadFromJsonAsync<LoginResponse>())!;
         client.DefaultRequestHeaders.Authorization = new("Bearer", login.AccessToken);
@@ -64,16 +75,26 @@ internal sealed class WorkflowTestDatabase : IAsyncDisposable
     public async Task<long> AddTicketAsync()
     {
         await using var db = Context();
-        var ticket = new Ticket { TicketNumber = $"T-{Guid.NewGuid():N}"[..30], Title = "Workflow integration test",
-            Description = "Disposable test data", Category = TicketCategory.Software, RequestedByUserId = Users["employee"] };
-        db.Tickets.Add(ticket); await db.SaveChangesAsync(); return ticket.Id;
+        var ticket = new Ticket
+        {
+            TicketNumber = $"T-{Guid.NewGuid():N}"[..30],
+            Title = "Workflow integration test",
+            Description = "Disposable test data",
+            Category = TicketCategory.Software,
+            RequestedByUserId = Users["employee"]
+        };
+        db.Tickets.Add(ticket);
+        await db.SaveChangesAsync();
+        return ticket.Id;
     }
 
     public async Task AssignAsync(long ticketId, string name)
     {
         await using var db = Context();
         var ticket = await db.Tickets.SingleAsync(x => x.Id == ticketId);
-        ticket.AssignedToUserId = Users[name]; ticket.AssignmentVersion++; await db.SaveChangesAsync();
+        ticket.AssignedToUserId = Users[name];
+        ticket.AssignmentVersion++;
+        await db.SaveChangesAsync();
     }
 
     public async ValueTask DisposeAsync()

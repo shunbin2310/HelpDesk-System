@@ -1,4 +1,6 @@
 using HelpDesk.Application.Users;
+using HelpDesk.Application.Delegations;
+using HelpDesk.Infrastructure.Delegations;
 using HelpDesk.Application.Workflows;
 using HelpDesk.Application.Tickets;
 using HelpDesk.Infrastructure.Tickets;
@@ -43,6 +45,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserAccountStore, UserAccountStore>();
         services.AddScoped<IWorkflowEngine, WorkflowEngine>();
         services.AddScoped<ITicketService, TicketService>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IDelegationService, DelegationService>();
+        services.AddScoped<DelegationProcessor>();
+        services.Configure<DelegationProcessingOptions>(configuration.GetSection("DelegationProcessing"));
+        services.AddHostedService<DelegationWorker>();
         services.AddScoped<ITicketAttachmentService, TicketAttachmentService>();
         services.AddOptions<AttachmentStorageOptions>().Bind(configuration.GetSection("Attachments"))
             .Validate(x => !string.IsNullOrWhiteSpace(x.RootPath), "Attachments:RootPath must specify a private directory.").ValidateOnStart();

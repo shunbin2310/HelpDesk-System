@@ -64,6 +64,12 @@ namespace HelpDesk.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("StartsAtUtc")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<DateTimeOffset?>("StoppedAtUtc")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<int?>("StoppedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<int>("TargetUserId")
                         .HasColumnType("int");
 
@@ -74,6 +80,8 @@ namespace HelpDesk.Infrastructure.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
+                    b.HasIndex("StoppedByUserId");
+
                     b.HasIndex("TargetUserId");
 
                     b.HasIndex("SourceUserId", "StartsAtUtc", "EndsAtUtc");
@@ -83,6 +91,8 @@ namespace HelpDesk.Infrastructure.Migrations
                             t.HasCheckConstraint("CK_Delegations_DifferentUsers", "[SourceUserId] <> [TargetUserId]");
 
                             t.HasCheckConstraint("CK_Delegations_Period", "[StartsAtUtc] < [EndsAtUtc]");
+
+                            t.HasCheckConstraint("CK_Delegations_StopAudit", "([StoppedAtUtc] IS NULL AND [StoppedByUserId] IS NULL) OR ([StoppedAtUtc] IS NOT NULL AND [StoppedByUserId] IS NOT NULL)");
                         });
                 });
 
@@ -1086,6 +1096,11 @@ namespace HelpDesk.Infrastructure.Migrations
                         .HasForeignKey("SourceUserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.HasOne("HelpDesk.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StoppedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("HelpDesk.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()

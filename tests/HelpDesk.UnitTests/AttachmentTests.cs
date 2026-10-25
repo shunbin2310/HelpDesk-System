@@ -37,7 +37,10 @@ public sealed class AttachmentTests
     [InlineData("x.gif", "GIF89a")]
     [InlineData("x.log", "Hello\tworld\r\n")]
     public void ExpectedSignaturesAndTextAreAccepted(string name, string content)
-    { using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content)); AttachmentContent.Validate(stream, name); }
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        AttachmentContent.Validate(stream, name);
+    }
 
     [Theory]
     [InlineData("x.pdf", "fake PDF")]
@@ -45,14 +48,18 @@ public sealed class AttachmentTests
     [InlineData("x.txt", "a\0b")]
     [InlineData("x.docx", "not a ZIP")]
     public void IncorrectContentIsRejected(string name, string content)
-    { using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content)); Assert.Throws<AttachmentValidationException>(() => AttachmentContent.Validate(stream, name)); }
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        Assert.Throws<AttachmentValidationException>(() => AttachmentContent.Validate(stream, name));
+    }
 
     [Fact]
     public void OfficePackagesMustMatchTheirTypeAndCannotContainMacrosOrDtds()
     {
         foreach (var extension in new[] { ".docx", ".xlsx" })
         {
-            using var package = Office(extension); AttachmentContent.Validate(package, "x" + extension);
+            using var package = Office(extension);
+            AttachmentContent.Validate(package, "x" + extension);
             Assert.Throws<AttachmentValidationException>(() => AttachmentContent.Validate(package, "x" + (extension == ".docx" ? ".xlsx" : ".docx")));
         }
         using var macro = Office(".docx", macro: true);
@@ -70,7 +77,8 @@ public sealed class AttachmentTests
             var store = new FileAttachmentStore(Options.Create(new AttachmentStorageOptions { RootPath = root }), NullLogger<FileAttachmentStore>.Instance);
             var saved = await store.SaveAsync(new("report.txt", 5, () => new MemoryStream("hello"u8.ToArray())));
             Assert.Matches("^[a-f0-9]{32}$", saved.StorageKey);
-            using (var reader = new StreamReader(store.OpenRead(saved.StorageKey))) Assert.Equal("hello", await reader.ReadToEndAsync());
+            using (var reader = new StreamReader(store.OpenRead(saved.StorageKey)))
+                Assert.Equal("hello", await reader.ReadToEndAsync());
             Assert.Single(Directory.GetFiles(root));
             foreach (var upload in new[] { new AttachmentUpload("fake.pdf", 5, () => new MemoryStream("hello"u8.ToArray())),
                 new AttachmentUpload("short.txt", 10, () => new MemoryStream("hello"u8.ToArray())),
@@ -81,7 +89,9 @@ public sealed class AttachmentTests
             Assert.Empty(store.KeysOlderThan(DateTimeOffset.UtcNow.AddDays(-1)));
             File.SetLastWriteTimeUtc(Path.Combine(root, saved.StorageKey + ".blob"), DateTime.UtcNow.AddDays(-2));
             Assert.Equal(saved.StorageKey, Assert.Single(store.KeysOlderThan(DateTimeOffset.UtcNow.AddDays(-1))));
-            store.Delete(saved.StorageKey); store.Delete(saved.StorageKey); Assert.Empty(Directory.GetFiles(root));
+            store.Delete(saved.StorageKey);
+            store.Delete(saved.StorageKey);
+            Assert.Empty(Directory.GetFiles(root));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -96,8 +106,10 @@ public sealed class AttachmentTests
             using (var xml = new StreamWriter(zip.CreateEntry("[Content_Types].xml").Open()))
                 xml.Write((dtd ? "<!DOCTYPE Types [<!ENTITY x 'bad'>]>" : "") + $"<Types><Override PartName='/{part}' ContentType='application/vnd.openxmlformats-officedocument.{type}.main+xml'/>"
                     + (macro ? "<Override ContentType='application/vnd.ms-word.document.macroEnabled.main+xml'/>" : "") + "</Types>");
-            using var content = new StreamWriter(zip.CreateEntry(part).Open()); content.Write("<document/>");
+            using var content = new StreamWriter(zip.CreateEntry(part).Open());
+            content.Write("<document/>");
         }
-        stream.Position = 0; return stream;
+        stream.Position = 0;
+        return stream;
     }
 }

@@ -22,7 +22,9 @@ if (!bootstrap)
         options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
             }));
     });
 }
@@ -56,6 +58,7 @@ app.MapUserEndpoints();
 app.MapWorkflowEndpoints();
 app.MapTicketEndpoints();
 app.MapTicketUploadEndpoints();
+app.MapDelegationEndpoints();
 
 app.Run();
 

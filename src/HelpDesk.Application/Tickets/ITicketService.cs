@@ -3,7 +3,10 @@ using HelpDesk.Domain.Enums;
 
 namespace HelpDesk.Application.Tickets;
 
-public enum TicketResultStatus { Success, NotFound, Forbidden, Conflict, Invalid }
+public enum TicketResultStatus
+{
+    Success, NotFound, Forbidden, Conflict, Invalid
+}
 public sealed record TicketResult<T>(TicketResultStatus Status, T? Value = default, string? Error = null);
 public sealed record CreateTicketRequest(string Title, string Description, TicketCategory Category);
 public sealed record AssignTicketRequest(int AssignedToUserId, byte[] RowVersion);
@@ -11,22 +14,40 @@ public sealed record SetTicketPriorityRequest(TicketPriority Priority, byte[] Ro
 public sealed record TicketAssignee(int Id, string FullName);
 public sealed record TicketListItem
 {
-    public long Id { get; init; }
+    public long Id
+    {
+        get; init;
+    }
     public string TicketNumber { get; init; } = "";
     public string Title { get; init; } = "";
     public string Category { get; init; } = "";
     public string Priority { get; init; } = "";
     public string Status { get; init; } = "";
-    public int RequestedByUserId { get; init; }
+    public int RequestedByUserId
+    {
+        get; init;
+    }
     public string RequesterName { get; init; } = "";
-    public int? AssignedToUserId { get; init; }
-    public string? AssigneeName { get; init; }
-    public DateTimeOffset CreatedAtUtc { get; init; }
-    public DateTimeOffset UpdatedAtUtc { get; init; }
+    public int? AssignedToUserId
+    {
+        get; init;
+    }
+    public string? AssigneeName
+    {
+        get; init;
+    }
+    public DateTimeOffset CreatedAtUtc
+    {
+        get; init;
+    }
+    public DateTimeOffset UpdatedAtUtc
+    {
+        get; init;
+    }
 }
 public sealed record TicketPage(IReadOnlyList<TicketListItem> Items, int Total, int Page);
 public sealed record TicketHistoryItem(long Id, string EventType, string ActorName, string? OldAssigneeName,
-    string? NewAssigneeName, string? OldPriority, string? NewPriority, DateTimeOffset CreatedAtUtc);
+    string? NewAssigneeName, string? OldPriority, string? NewPriority, DateTimeOffset CreatedAtUtc, long? DelegationId = null, string? Comment = null);
 public sealed record TicketDetail(TicketListItem Ticket, string Description, byte[] RowVersion,
     WorkflowSnapshot Workflow, IReadOnlyList<TicketHistoryItem> ManagementHistory);
 

@@ -11,12 +11,6 @@ public sealed class StartupDatabaseMigrator(
     public async Task ApplyAsync(CancellationToken cancellationToken = default)
     {
         var settings = options.Value;
-        if (!settings.MigrateOnStartup)
-        {
-            logger.LogInformation("Startup database migration is disabled.");
-            return;
-        }
-
         if (string.IsNullOrWhiteSpace(settings.ExpectedDatabase) ||
             settings.CommandTimeoutSeconds is < 1 or > 1800)
             throw new InvalidOperationException("Startup migration requires ExpectedDatabase and a timeout between 1 and 1800 seconds.");

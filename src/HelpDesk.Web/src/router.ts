@@ -10,6 +10,7 @@ import WorkflowView from './views/WorkflowView.vue'
 import TicketsView from './views/TicketsView.vue'
 import CreateTicketView from './views/CreateTicketView.vue'
 import TicketDetailView from './views/TicketDetailView.vue'
+import DelegationsView from './views/DelegationsView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -19,7 +20,16 @@ export const router = createRouter({
     { path: '/tickets', component: TicketsView },
     { path: '/tickets/new', component: CreateTicketView, meta: { role: 'EMPLOYEE' } },
     { path: '/tickets/:ticketId', component: TicketDetailView },
-    { path: '/assignments', component: TicketsView, meta: { roles: ['SUPPORT_ADMIN', 'SYSTEM_ADMIN'] } },
+    {
+      path: '/assignments',
+      component: TicketsView,
+      meta: { roles: ['SUPPORT_ADMIN', 'SYSTEM_ADMIN'] },
+    },
+    {
+      path: '/delegations',
+      component: DelegationsView,
+      meta: { roles: ['SUPPORT_ADMIN', 'SYSTEM_ADMIN'] },
+    },
     { path: '/users', component: UsersView, meta: { role: 'SYSTEM_ADMIN' } },
     { path: '/workflow', component: WorkflowView, meta: { role: 'SYSTEM_ADMIN' } },
     { path: '/password', component: PasswordView },
@@ -28,7 +38,7 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach(async to => {
+router.beforeEach(async (to) => {
   if (to.path === '/login' || to.path === '/access') return true
   if (!session.value || Date.parse(session.value.expiresAtUtc) <= Date.now()) {
     setSession(null)
@@ -38,7 +48,10 @@ router.beforeEach(async to => {
     const user = await request<UserAccount>('/auth/me')
     if (!session.value) return '/login'
     setSession({ ...session.value, user })
-    if ((to.meta.role && user.role !== to.meta.role) || (Array.isArray(to.meta.roles) && !to.meta.roles.includes(user.role)))
+    if (
+      (to.meta.role && user.role !== to.meta.role) ||
+      (Array.isArray(to.meta.roles) && !to.meta.roles.includes(user.role))
+    )
       return { path: '/access', query: { reason: 'forbidden' } }
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return '/login'

@@ -67,14 +67,29 @@ public sealed class TicketWorkflowPolicyTests
     public void ResolvedCannotBeConfiguredAsATerminalStep()
     {
         var steps = new[] { TicketWorkflow.Open, TicketWorkflow.InProgress, TicketWorkflow.Resolved, TicketWorkflow.Closed }
-            .Select((code, index) => new WorkflowStepTemplate { Id = index + 1, ProcessTemplateId = 1, Code = code,
-                IsInitial = code == TicketWorkflow.Open, IsTerminal = code == TicketWorkflow.Closed }).ToArray();
+            .Select((code, index) => new WorkflowStepTemplate
+            {
+                Id = index + 1,
+                ProcessTemplateId = 1,
+                Code = code,
+                IsInitial = code == TicketWorkflow.Open,
+                IsTerminal = code == TicketWorkflow.Closed
+            }).ToArray();
         var actions = new[] { (TicketWorkflow.StartProcessing, 1, 2), (TicketWorkflow.Resolve, 2, 3),
                 (TicketWorkflow.Close, 3, 4), (TicketWorkflow.Reopen, 3, 2) }
-            .Select((value, index) => new WorkflowActionTemplate { Id = index + 1, ProcessTemplateId = 1,
-                Code = value.Item1, FromStepTemplateId = value.Item2, ToStepTemplateId = value.Item3 }).ToArray();
-        var rules = actions.Select(x => new WorkflowActionerTemplate { ActionTemplateId = x.Id,
-            ActionerType = x.Code is TicketWorkflow.Close or TicketWorkflow.Reopen ? WorkflowActionerType.Requester : WorkflowActionerType.CurrentAssignee }).ToArray();
+            .Select((value, index) => new WorkflowActionTemplate
+            {
+                Id = index + 1,
+                ProcessTemplateId = 1,
+                Code = value.Item1,
+                FromStepTemplateId = value.Item2,
+                ToStepTemplateId = value.Item3
+            }).ToArray();
+        var rules = actions.Select(x => new WorkflowActionerTemplate
+        {
+            ActionTemplateId = x.Id,
+            ActionerType = x.Code is TicketWorkflow.Close or TicketWorkflow.Reopen ? WorkflowActionerType.Requester : WorkflowActionerType.CurrentAssignee
+        }).ToArray();
         Assert.Null(TicketWorkflowPolicy.ValidateTemplate(steps, actions, rules));
         steps[2].IsTerminal = true;
         Assert.NotNull(TicketWorkflowPolicy.ValidateTemplate(steps, actions, rules));

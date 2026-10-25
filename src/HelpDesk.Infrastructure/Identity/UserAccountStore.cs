@@ -1,6 +1,7 @@
 using HelpDesk.Application.Users;
 using HelpDesk.Domain.Constants;
 using HelpDesk.Infrastructure.Persistence;
+using HelpDesk.Infrastructure.Delegations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +16,14 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
         var query = from user in context.Users.AsNoTracking()
                     join membership in context.UserRoles on user.Id equals membership.UserId
                     join role in context.Roles on membership.RoleId equals role.Id
-                    select new { user.Id, user.Email, user.FullName, Role = role.Name, user.IsActive };
+                    select new
+                    {
+                        user.Id,
+                        user.Email,
+                        user.FullName,
+                        Role = role.Name,
+                        user.IsActive
+                    };
         return new(await query.OrderBy(x => x.Id).Skip((page - 1) * 25).Take(25)
                 .Select(x => new UserAccount(x.Id, x.Email!, x.FullName, x.Role!, x.IsActive)).ToListAsync(cancellationToken),
             await query.CountAsync(cancellationToken), page);
@@ -27,13 +35,18 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
     public Task<UserAccountResult> BootstrapAdminAsync(CreateUserAccount account, CancellationToken cancellationToken = default) =>
         MutateAsync(async () =>
         {
-            if (await Admins().AnyAsync(cancellationToken)) return Failed("A System Admin already exists. Use user management.");
-            return await CreateCoreAsync(account with { Role = ApplicationRoles.SystemAdmin });
+            if (await Admins().AnyAsync(cancellationToken))
+                return Failed("A System Admin already exists. Use user management.");
+            return await CreateCoreAsync(account with
+            {
+                Role = ApplicationRoles.SystemAdmin
+            });
         }, cancellationToken);
 
     private async Task<UserAccountResult> CreateCoreAsync(CreateUserAccount account)
     {
-        if (!ApplicationRoles.IsValid(account.Role) || !await roles.RoleExistsAsync(account.Role)) return Failed("Unknown role.");
+        if (!ApplicationRoles.IsValid(account.Role) || !await roles.RoleExistsAsync(account.Role))
+            return Failed("Unknown role.");
         if (string.IsNullOrWhiteSpace(account.Email) || account.Email.Length > 256
             || string.IsNullOrWhiteSpace(account.FullName) || account.FullName.Length > 200)
             return Failed("Email (at most 256 characters) and full name (at most 200 characters) are required.");
@@ -41,25 +54,32 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
             return Failed("Password is required and must be at most 128 characters.");
         var user = new ApplicationUser
         {
-            Email = account.Email.Trim(), UserName = account.Email.Trim(), FullName = account.FullName.Trim()
+            Email = account.Email.Trim(),
+            UserName = account.Email.Trim(),
+            FullName = account.FullName.Trim()
         };
         var result = await users.CreateAsync(user, account.Password);
-        if (result.Succeeded) result = await users.AddToRoleAsync(user, account.Role);
+        if (result.Succeeded)
+            result = await users.AddToRoleAsync(user, account.Role);
         return Result(user.Id, result);
     }
 
     public Task<UserAccountResult> SetRoleAsync(int userId, string role, CancellationToken cancellationToken = default) =>
         MutateAsync(async () =>
         {
-            if (!ApplicationRoles.IsValid(role) || !await roles.RoleExistsAsync(role)) return Failed("Unknown role.");
+            if (!ApplicationRoles.IsValid(role) || !await roles.RoleExistsAsync(role))
+                return Failed("Unknown role.");
             var user = await FindAsync(userId);
-            if (user is null) return Failed("User not found.");
+            if (user is null)
+                return Failed("User not found.");
             var previous = await users.GetRolesAsync(user);
-            if (previous.Count == 1 && previous[0] == role) return new(user.Id, []);
+            if (previous.Count == 1 && previous[0] == role)
+                return new(user.Id, []);
             if (role != ApplicationRoles.SystemAdmin && await IsLastActiveAdminAsync(user, cancellationToken))
                 return Failed("Keep at least one active System Admin.");
             var result = await users.RemoveFromRolesAsync(user, previous);
-            if (result.Succeeded) result = await users.AddToRoleAsync(user, role);
+            if (result.Succeeded)
+                result = await users.AddToRoleAsync(user, role);
             if (result.Succeeded)
             {
                 user.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -72,8 +92,10 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
         MutateAsync(async () =>
         {
             var user = await FindAsync(userId);
-            if (user is null) return Failed("User not found.");
-            if (user.IsActive == isActive) return new(user.Id, []);
+            if (user is null)
+                return Failed("User not found.");
+            if (user.IsActive == isActive)
+                return new(user.Id, []);
             if (!isActive && await IsLastActiveAdminAsync(user, cancellationToken))
                 return Failed("Keep at least one active System Admin.");
             user.IsActive = isActive;
@@ -87,7 +109,8 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
             if (string.IsNullOrEmpty(password) || password.Length > 128)
                 return Failed("Password is required and must be at most 128 characters.");
             var user = await FindAsync(userId);
-            if (user is null) return Failed("User not found.");
+            if (user is null)
+                return Failed("User not found.");
             var token = await users.GeneratePasswordResetTokenAsync(user);
             return Result(user.Id, await users.ResetPasswordAsync(user, token, password));
         }, cancellationToken);
@@ -111,6 +134,8 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            // Keep staff availability stable while a delegation validates and changes assignments.
+            await DelegationLock.AcquireAsync(context, cancellationToken);
             // Serialize administration across API processes to protect bootstrap and the last active admin.
             await context.Database.ExecuteSqlRawAsync("""
                 DECLARE @result int;
@@ -119,7 +144,8 @@ public sealed class UserAccountStore(HelpDeskDbContext context, UserManager<Appl
                 IF @result < 0 THROW 51000, 'User administration is busy. Try again.', 1;
                 """, cancellationToken);
             var result = await operation();
-            if (result.Succeeded) await transaction.CommitAsync(cancellationToken);
+            if (result.Succeeded)
+                await transaction.CommitAsync(cancellationToken);
             else
             {
                 await transaction.RollbackAsync(cancellationToken);

@@ -38,9 +38,15 @@ public static class BootstrapAdminCommand
         while (true)
         {
             var key = Console.ReadKey(intercept: true);
-            if (key.Key == ConsoleKey.Enter) { Console.WriteLine(); return value.ToString(); }
-            if (key.Key == ConsoleKey.Backspace && value.Length > 0) value.Length--;
-            else if (!char.IsControl(key.KeyChar) && value.Length < 1024) value.Append(key.KeyChar);
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                return value.ToString();
+            }
+            if (key.Key == ConsoleKey.Backspace && value.Length > 0)
+                value.Length--;
+            else if (!char.IsControl(key.KeyChar) && value.Length < 1024)
+                value.Append(key.KeyChar);
         }
     }
 }

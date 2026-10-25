@@ -32,14 +32,21 @@ public sealed class WorkflowTemplateService(HelpDeskDbContext db, ICurrentUserCo
                 IF @result < 0 THROW 51000, 'Workflow setup is busy. Try again.', 1;
                 """, cancellationToken);
             var active = await Active().SingleOrDefaultAsync(cancellationToken);
-            if (active is not null) return new(WorkflowResultStatus.Success, await SnapshotAsync(active, cancellationToken));
+            if (active is not null)
+                return new(WorkflowResultStatus.Success, await SnapshotAsync(active, cancellationToken));
             if (await db.WorkflowProcessTemplates.AnyAsync(x => x.Code == "HELPDESK_TICKET" && x.Version == 1, cancellationToken))
                 return new(WorkflowResultStatus.Conflict, Error: "The default template already exists but is inactive. Existing configuration was preserved.");
 
             var template = new WorkflowProcessTemplate
             {
-                Code = "HELPDESK_TICKET", Name = "IT Helpdesk Workflow", EntityType = TicketWorkflow.EntityType,
-                Version = 1, IsPublished = true, IsActive = true, CreatedByUserId = actor.Id, PublishedAtUtc = DateTimeOffset.UtcNow
+                Code = "HELPDESK_TICKET",
+                Name = "IT Helpdesk Workflow",
+                EntityType = TicketWorkflow.EntityType,
+                Version = 1,
+                IsPublished = true,
+                IsActive = true,
+                CreatedByUserId = actor.Id,
+                PublishedAtUtc = DateTimeOffset.UtcNow
             };
             db.WorkflowProcessTemplates.Add(template);
             await db.SaveChangesAsync(cancellationToken);
@@ -47,8 +54,12 @@ public sealed class WorkflowTemplateService(HelpDeskDbContext db, ICurrentUserCo
                 (TicketWorkflow.Resolved, "Resolved"), (TicketWorkflow.Closed, "Closed")];
             var steps = definitions.Select((x, index) => new WorkflowStepTemplate
             {
-                ProcessTemplateId = template.Id, Code = x.Code, Name = x.Name, DisplayOrder = index,
-                IsInitial = x.Code == TicketWorkflow.Open, IsTerminal = x.Code == TicketWorkflow.Closed
+                ProcessTemplateId = template.Id,
+                Code = x.Code,
+                Name = x.Name,
+                DisplayOrder = index,
+                IsInitial = x.Code == TicketWorkflow.Open,
+                IsTerminal = x.Code == TicketWorkflow.Closed
             }).ToArray();
             db.WorkflowStepTemplates.AddRange(steps);
             await db.SaveChangesAsync(cancellationToken);
@@ -62,17 +73,23 @@ public sealed class WorkflowTemplateService(HelpDeskDbContext db, ICurrentUserCo
             ];
             var actions = transitions.Select(x => new WorkflowActionTemplate
             {
-                ProcessTemplateId = template.Id, Code = x.Code, Name = x.Name, RequiresComment = TicketWorkflowPolicy.RequiresComment(x.Code, false),
-                FromStepTemplateId = byCode[x.From].Id, ToStepTemplateId = byCode[x.To].Id
+                ProcessTemplateId = template.Id,
+                Code = x.Code,
+                Name = x.Name,
+                RequiresComment = TicketWorkflowPolicy.RequiresComment(x.Code, false),
+                FromStepTemplateId = byCode[x.From].Id,
+                ToStepTemplateId = byCode[x.To].Id
             }).ToArray();
             db.WorkflowActionTemplates.AddRange(actions);
             await db.SaveChangesAsync(cancellationToken);
             var actioners = actions.Select((action, index) => new WorkflowActionerTemplate
             {
-                ActionTemplateId = action.Id, ActionerType = transitions[index].Actor
+                ActionTemplateId = action.Id,
+                ActionerType = transitions[index].Actor
             }).ToArray();
             var error = TicketWorkflowPolicy.ValidateTemplate(steps, actions, actioners);
-            if (error is not null) return new(WorkflowResultStatus.Invalid, Error: error);
+            if (error is not null)
+                return new(WorkflowResultStatus.Invalid, Error: error);
             db.WorkflowActionerTemplates.AddRange(actioners);
             await db.SaveChangesAsync(cancellationToken);
             return new(WorkflowResultStatus.Success, await SnapshotAsync(template, cancellationToken));

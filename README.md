@@ -1,6 +1,6 @@
 # HelpDesk-System
 
-公司内部 IT Helpdesk System。当前已完成 Vue 3 + TypeScript / .NET 10 分层骨架、账号管理、Workflow Engine，Ticket 核心闭环，以及阶段 5 提交附件与处理历史。
+公司内部 IT Helpdesk System。当前已完成 Vue 3 + TypeScript / .NET 10 分层骨架、账号管理、Workflow Engine，Ticket 核心闭环，以及阶段 5 提交附件与处理历史，以及 Delegation 自动交接与归还。
 
 ## 项目结构
 
@@ -26,7 +26,7 @@ tests/
 
 本机开发连接在 `src/HelpDesk.Api/appsettings.Development.json`：服务器 BIN、数据库 HelpDeskDb、Windows Authentication。使用当前进程的 Windows 身份；本地信任服务器证书的设置与本机 SSMS 配置一致。该连接不用于 Docker 或生产环境，其他环境通过 `ConnectionStrings__DefaultConnection` 提供自己的连接配置。
 
-数据库默认关闭启动迁移；`/health` 不访问数据库，登录和账号接口会访问数据库。四个角色共用登录入口，每个账号一个角色，只有 System Admin 可以管理用户。
+API 每次启动都检查并应用待执行 Migration，成功后才启动服务；`/health` 本身不访问数据库，登录和账号接口会访问数据库。四个角色共用登录入口，每个账号一个角色，只有 System Admin 可以管理用户。
 
 ## 首次设置账号与 JWT
 
@@ -129,6 +129,47 @@ API 启动及之后每小时核对一次超过 24 小时的文件，只删除数
 
 当前检查**不包含病毒扫描**，签名和格式检查不能证明文件无恶意内容；对外开放前应接入本地恶意文件扫描，并按组织要求控制下载和打开。实现参考 [ASP.NET Core 文件上传](https://learn.microsoft.com/en-us/aspnet/core/mvc/models/file-uploads?view=aspnetcore-10.0) 与 [OWASP 上传指南](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)。
 
+## Delegation（代理与自动归还）
+
+Support Admin / System Admin 登录后进入 **Delegations**，选择原负责人 A、代理人 B、开始日期、结束日期及可选原因（最多 1000 字符），不再选择时间或 Start now。双方必须为启用的 Support IT Staff，且不能相同。日期按马来西亚 UTC+8：开始日期不能早于今天，选今天立即生效，未来日期在当天 00:00 生效；结束日期不能早于开始日期，允许同一天，包含结束当天，次日 00:00 到期。前端限制选择范围，API 再次校验；过午夜后提交旧日期也会被拒绝。API 接收 `yyyy-MM-dd` 纯日期并转换为 UTC 时间区间，数据库仍使用现有字段，旧安排不改动。历史中旧的按时间安排仍显示原时间。
+
+- 生效时，只交接 A 的 Open / In Progress，保持状态；A 原有的 Resolved / Closed 保留。
+- 有效期间分配给 A 的未关闭工单实际交给 B，历史记录原本应分配给 A。B 原有的工单不因本次代理被归还。
+- 到期只归还本次代理交出的 Open / In Progress / Resolved，保持原状态；Closed 保留。
+- Admin 后续实际转派给 C，或转给 C 后又转给 B，均保留人工安排；通过 AssignmentVersion 识别。
+- 同一 Staff 在同一时间只能参与一条代理，禁止重叠 / 链式代理；相邻时间段允许，但上一条归还未完成时，下一条暂停交接并显示 Needs attention。
+- Scheduled 尚未开始时，两种 Admin 可以 Cancel；不会交接任何工单。
+- 当前处于有效期间的安排可 End early，立即停止后续代理分配，并按既有规则归还 Open / In Progress / Resolved；Closed 和人工转派保留。
+- 取消 / 提前结束保留记录、操作人、停止时间和原计划结束时间，不提供删除或修改原安排。若 A 不可用，待归还工单仍留在 B，恢复后由后台重试。
+
+账号停用或改成其他角色时，无法交接的安排显示 Needs attention；到期 A 无法处理时，待归还工单暂留 B。恢复有效 Staff 身份后自动重试；Admin 可以手动转派其他 Staff，后续归还会保留此安排。页面显示原因、交接工单、当前负责人和 Returned / Kept closed / Kept after admin reassignment 等结果。列表和工单明细各每页 25 条，点击 Refresh 更新后台结果。
+
+后台在 API 启动后运行，之后每 30 秒检查一次。API 必须保持运行；停机期间不执行任务，重启后补做仍有效的交接及到期归还。整段代理期间都错过且未交接任何工单时，标记完成，不追溯制造一次交接。正常情况下定时处理可能延迟约 30 秒，故障时自动重试。测试环境通过 `DelegationProcessing__Enabled=false` 关闭定时器后直接验证处理器，普通开发默认启用。
+
+交接、Ticket 更新、DelegationTickets 和 TicketHistories 同一事务提交。数据库应用锁协调不同 API 进程的代理创建、分配、账号管理及定时处理，再锁定 Ticket 行复核当前状态；重复执行不重复记录交接或归还。失败回滚，该条安排下次重试，其他安排继续处理。单 IT 团队采用一个分配锁，未引入队列或外部调度依赖。
+
+| API | 权限 / 用途 |
+| --- | --- |
+| GET /delegations?page=1 | 两种 Admin；分页列表、状态和计数 |
+| POST /delegations | 两种 Admin；sourceUserId、targetUserId、startDate、endDate（均为 yyyy-MM-dd，结束日期包含当天）、reason |
+| GET /delegations/{id}?page=1 | 两种 Admin；代理详情及分页工单明细 |
+| POST /delegations/{id}/cancel | 两种 Admin；尚未开始的安排；提交 rowVersion |
+| POST /delegations/{id}/end-early | 两种 Admin；有效期间提前结束；提交 rowVersion |
+
+取消功能新增 `20261025083228_AddDelegationStopAudit`：向 Delegations 增加可空的 StoppedAtUtc / StoppedByUserId、操作人外键和成对填写约束，保留旧数据。从仓库根目录正常启动即可自动应用待执行 Migration：
+
+```powershell
+dotnet run --project .\src\HelpDesk.Api --launch-profile http
+```
+
+迁移成功后刷新前端。每次启动都会检查，无待执行 Migration 时跳过更新。
+
+Cancel / End early 会先显示确认弹窗，默认焦点为 Keep delegation，提交时禁用重复操作。界面按后端 canCancel / canEndEarly 显示按钮；过期状态或旧 rowVersion 返回 409，刷新后再核对。相同操作重复发送幂等返回已有结果，不重复归还或写入操作人；不能对 Cancelled 执行 End early，或对 Ended early 再执行 Cancel。
+
+返回的状态包括 Cancelled、Ended early，以及提前结束但仍需归还的 Returning / Needs attention。RowVersion 是 Base64 SQL rowversion，仅用于该代理，不能使用 Ticket 或 Workflow 的版本。
+
+手动测试：准备两个 IT Staff，先将一张 Open 工单分配给 A；在 Delegations 创建 A→B，开始和结束日期都选今天。确认负责人立即变为 B，再分配另一张工单给 A，应实际交给 B。结束日期早于开始日期或开始日期早于今天时不能提交。可用 End early 即时验证归还；自然到期需保持 API 运行到结束日期的次日 00:00 MYT，等待最多约 30 秒并 Refresh，未被人工转派的工单应归还 A。另测未来开始日期时可 Cancel、重叠日期被拒绝、期间 Resolved 后归还、Closed 保留、人工转给 C 后保留，以及账号停用时 Needs attention。
+
 ## 本地启动
 
 以下命令使用 PowerShell。从仓库根目录打开第一个终端，启动 API：
@@ -157,13 +198,13 @@ npm.cmd run dev
 
 2026-10-24 已在 BIN 创建 HelpDeskDb，并应用全部三个 Migration。数据库包含 22 张应用表，以及 EF 的 `__EFMigrationsHistory` 表；预置四个角色，不创建默认账号。
 
-Startup Migration 默认关闭。需要应用待执行 Migration 时，从仓库根目录显式开启：
+API 每次启动都检查 Pending Migration，不再提供 `MigrateOnStartup` 开关。从仓库根目录正常启动：
 
 ```powershell
-dotnet run --project .\src\HelpDesk.Api --launch-profile http -- --Database:MigrateOnStartup=true --Database:ExpectedDatabase=HelpDeskDb
+dotnet run --project .\src\HelpDesk.Api --launch-profile http
 ```
 
-启动顺序为：校验预期数据库 → 查询待执行 Migration → 有待执行项才应用 → 成功后启动 HTTP。无待执行项时跳过，失败则拒绝启动。验证数据库名不会替代对服务器及连接配置的确认。
+启动顺序为：校验预期数据库 → 查询待执行 Migration → 有待执行项才应用 → 成功后启动 HTTP 和后台任务。无待执行项时跳过更新，失败则拒绝启动。开发环境已配置 `Database:ExpectedDatabase=HelpDeskDb`；其他环境也必须配置与连接目标一致的预期数据库，并授予迁移所需权限。验证数据库名不会替代对服务器及连接配置的确认。
 
 生成新 Migration 前先停止正在运行的 API，避免 Windows 构建文件锁；在仓库根目录执行：
 
@@ -198,9 +239,17 @@ dotnet test .\HelpDesk.slnx --configuration Release
 
 SQL Server 测试使用事务回滚或针对性清理移除自己创建的记录。账号和流程测试会在同一 SQL Server 创建独立、带随机名称的 `HelpDeskAuthTests_*` / `HelpDeskWorkflowTests_*` 数据库，应用现有 Migration 并在结束时删除这些测试库，因此测试身份需要创建和删除数据库的权限；不会删除配置指向的 HelpDeskDb。若测试进程被强制结束，可能需要按对应随机名称手动清理残留测试库。
 
-未设置 `HELPDESK_TEST_CONNECTION` 时，18 项集成测试会显示为 Skipped；不能将跳过视为数据库验证通过。2026-10-24 验证：48 项单元测试、14 项 SQL Server 集成测试全部通过，无跳过。在原有账号和流程测试上，新增 Ticket 完整 API 闭环、提交人等字段防篡改、分页与可见性、分配和优先级历史、并发编辑、失效权限和创建失败回滚；编号测试覆盖马来西亚午夜 / 跨年、全局 ID 及字段长度。
+未设置 `HELPDESK_TEST_CONNECTION` 时，32 项集成测试会显示为 Skipped；不能将跳过视为数据库验证通过。2026-10-24 验证：48 项单元测试、14 项 SQL Server 集成测试全部通过，无跳过。在原有账号和流程测试上，新增 Ticket 完整 API 闭环、提交人等字段防篡改、分页与可见性、分配和优先级历史、并发编辑、失效权限和创建失败回滚；编号测试覆盖马来西亚午夜 / 跨年、全局 ID 及字段长度。
 
 2026-10-25 阶段 5 简化版：66 项单元测试与 18 项 SQL Server 集成测试全部通过，无跳过。覆盖附件校验、五附件提交、角色可见性、转派后权限、Closed 下载、旧消息路由移除和旧消息附件隐藏、数据库失败回滚及孤立文件清理。浏览器已验证 Employee 提交、附件显示、Employee / Admin 均无消息入口和 375px 布局。测试附件使用独立临时目录，结束后清理；没有新增 Migration 或依赖。
+
+2026-10-25 Delegation：66 项单元测试、25 项 SQL Server 集成测试全部通过，无跳过；新增 7 项覆盖交接 / 归还状态、权限撤销、代理期间分配、账号异常恢复、重叠校验、相邻时段、重复执行、事务失败和并发。EF 模型与 Migration Snapshot 一致，无新 Migration。浏览器已验证 Support Admin 创建代理、即时交接、真实后台到期归还、工单明细及 375px 布局。
+
+2026-10-25 取消 / 提前结束：66 项单元测试、31 项 SQL Server 集成测试通过。新增覆盖权限、非法状态、版本冲突、重复请求、即时停止路由、状态保持、人工转派、账号异常延后归还、并发停止、事务回滚，以及从旧数据库升级时保留原数据和校验操作人。测试使用迁移到最新版本的独立数据库；随后已在本机 HelpDeskDb 应用新增 Migration。
+
+2026-10-25 启动迁移改为始终检查：66 项单元测试、31 项 SQL Server 集成测试全部通过，无跳过。验证每次启动检查历史、有待执行项时更新、无待执行项时跳过更新、配置错误和迁移失败时拒绝启动；真实 API 启动测试覆盖空库初始化、旧库升级保留数据及再次启动不重复应用 Migration。未新增 Migration 或前端改动。
+
+2026-10-25 Delegation 日期选择：66 项单元测试、32 项 SQL Server 集成测试全部通过，无跳过，前端类型检查与构建通过。新增真实 API 测试覆盖同一天即时生效、马来西亚午夜到期及过期日期重验、未来日期 00:00 生效、跨年、闰日、非法 / 缺少日期和相邻 / 重叠日期；既有代理交接、归还、取消和提前结束测试均改用日期请求。浏览器验证过去日期、结束早于开始、同一天及 375px 布局；日期格式和旧安排展示断言、前后端格式检查通过。无数据库 Migration。
 
 ## 构建
 
@@ -222,12 +271,31 @@ npm.cmd run build
 
 工具文档：[Vue TypeScript](https://vuejs.org/guide/typescript/overview.html)、[Vite](https://vite.dev/guide/)。
 
+## 代码格式
+
+源码使用多行排版。前端通过 Prettier，C# 通过 .NET 自带 formatter；缩进、换行及单行语句规则分别保存在 `.editorconfig` 和 `src/HelpDesk.Web/.prettierrc.json`。Migration / Designer / Snapshot 等生成文件不参与本次格式整理。
+
+在前端目录运行：
+
+```powershell
+npm.cmd run format
+npm.cmd run format:check
+```
+
+在仓库根目录格式化 C#：
+
+```powershell
+dotnet format whitespace .\HelpDesk.slnx --no-restore --exclude .\src\HelpDesk.Infrastructure\Migrations\
+```
+
+Prettier 仅为开发依赖，不改变应用运行逻辑。`.gitattributes` 固定前端 LF、C# CRLF，避免不同机器反复改变换行格式。
+
 ## 设计文档
 
 - [实施计划与开发步骤](docs/implementation-plan.md)
 - [需求说明](docs/requirements.md)
 - [数据库设计草案](docs/database-design.md)
 
-当前已完成阶段 5。默认流程仍由 System Admin 在 Workflow 页首次初始化，现有账号不受影响。下一阶段为 Workflow Template 管理，具体编辑范围待确认。
+当前已完成阶段 5。默认流程仍由 System Admin 在 Workflow 页首次初始化，现有账号不受影响。Delegation 已完成；Workflow Template 编辑器按用户保持简单的方向暂缓，后续先进行整体验收。
 
 JWT 验证遵循 [ASP.NET Core Bearer 文档](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0)，前端权限导航使用 [Vue Router guards](https://router.vuejs.org/guide/advanced/navigation-guards)。界面导航只提供交互限制，实际权限由 API Bearer 验证和角色授权执行。
