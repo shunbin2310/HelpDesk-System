@@ -1,0 +1,60 @@
+# Install as root-owned /opt/helpdesk-auto/compose.yml. Images are exact GHCR digests.
+name: helpdesk-auto
+
+services:
+  api:
+    image: ${API_IMAGE:?Use helpdesk-auto-deploy to select the API digest}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__ExpectedDatabase: HelpDeskDb
+      Database__CommandTimeoutSeconds: "180"
+      ConnectionStrings__DefaultConnection: "Server=tcp:host.docker.internal,1433;Database=HelpDeskDb;User Id=helpdesk_app;Password=${HELPDESK_SQL_PASSWORD:?Set the HelpDesk SQL password};Encrypt=True;TrustServerCertificate=True"
+      Jwt__Issuer: HelpDesk.Ubuntu
+      Jwt__Audience: HelpDesk.Ubuntu.Web
+      Jwt__SigningKey: "${HELPDESK_JWT_KEY:?Set a random signing key}"
+      Attachments__RootPath: /data/attachments
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - attachments:/data/attachments
+      - data-protection:/home/app/.aspnet/DataProtection-Keys
+    # Enable automatic restarts only after successful migration and health checks.
+    restart: "no"
+    mem_limit: 1g
+    cpus: 1.0
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 240s
+
+  web:
+    image: ${WEB_IMAGE:?Use helpdesk-auto-deploy to select the Web digest}
+    # Select one private LAN/Tailscale IP. Never default to all host interfaces.
+    ports: ["${HELPDESK_BIND_IP:-127.0.0.1}:8085:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
+    cap_drop: [ALL]
+    # The existing Nginx master prepares its cache and switches workers to nginx.
+    cap_add: [CHOWN, SETGID, SETUID]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: [CMD, wget, --quiet, --spider, "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  attachments:
+  data-protection:

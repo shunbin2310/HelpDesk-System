@@ -48,7 +48,7 @@ Api 引用 Application 和 Infrastructure；Application 引用 Domain；Infrastr
 
 以上是参考公司项目后的组织方式。当前已建立四个 .NET 项目、Vue Web、UnitTests 和 IntegrationTests，并完成阶段 1 数据基础。启动和测试方式见 [README](../README.md)。
 
-Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；每次启动 API 时，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 不再提供启动迁移开关；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。GitHub Actions CI 已配置模型检查和独立 SQL 测试，并在 PR #6 通过远端检查；新增 GHCR 发布配置仅在原仓库 main Push 检查通过后执行，首次上传与本机拉取仍待验收，详见[CI 说明](ci.md)及[GHCR 说明](ghcr.md)。
+Migration 管理参考公司项目 API 启动时查询并应用待执行 Migration 的流程，并结合 Project1 的目标数据库校验及模型检查：开发时生成并提交文件，通过模型检查发现漏写的 Migration；每次启动 API 时，由 Api 的 Program.cs 调用迁移服务，检查并应用目标数据库尚未执行的 Migration，成功后才继续初始化和启动服务。Helpdesk 不再提供启动迁移开关；具体设计见[实施计划第 15 节](implementation-plan.md#15-ef-core-migration-与启动更新)。GitHub Actions CI 已配置模型检查和独立 SQL 测试；PR #7 合并后 main 的实际 GHCR 发布与本机拉取已验收。后续与 Purchasing 共用 Ubuntu，使用全新独立 HelpDeskDb；自动部署文件已准备，服务器安装和权限须现场配置，详见[Ubuntu 部署说明](ubuntu-deployment.md)。
 
 ## 2. 用户与角色
 
@@ -248,6 +248,6 @@ Workflow Engine 已实现实例复制、可用动作、权限和 History。执�
 - 代理边界与调度方式，尤其是人员停用和重叠安排。
 - 工作流配置页的可编辑范围，以及哪些动作必须填写说明。
 - 模板和数据库的部署初始化方式；附件限额已在阶段 5 确定，工单编号和核心表单长度已在阶段 4 确定。
-- UI 组件库、Dashboard、通知，以及 GitHub Actions 触发方式、镜像仓库、服务器和 SQL Server 部署位置等细节。
+- UI 组件库、Dashboard、通知、正式域名及 HTTPS。已确认 main 发布 GHCR，后续通过开关启用 Ubuntu CD；服务器与 Purchasing 共用，主机 SQL Server 新建 HelpDeskDb，现场安装和首次部署尚待验收。
 
 这些事项不妨碍审核当前数据库草案，但涉及的实现不得把草案建议当作额外已批准业务功能。

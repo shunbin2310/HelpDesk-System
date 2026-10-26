@@ -1,0 +1,2 @@
+# Validate with visudo -cf before installation. No Docker group or general sudo grant.
+helpdesk_deploy ALL=(root) NOPASSWD: NOSETENV: /usr/local/sbin/helpdesk-auto-deploy

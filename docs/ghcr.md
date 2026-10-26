@@ -27,7 +27,7 @@ GHCR 新包默认 private，本实现不修改包可见性。来源仓库 Label 
 2. 合并到 main；main Push 会再次验证，并在通过后发布两个镜像。
 3. 在 Actions → HelpDesk CI → Publish GHCR images 查看日志和 Summary，也可在账号 Packages 页面查看 helpdesk-api 和 helpdesk-web。
 
-这只发布镜像，不自动更新你的本机 Docker 或任何服务器。
+发布本身不更新本机 Docker。后续新增 Ubuntu 部署 Job，只有服务器准备完成、DOCKER_DEPLOY_ENABLED=true 时才执行；首次安装见[Ubuntu 部署说明](ubuntu-deployment.md)。
 
 ## 本机拉取与运行
 
@@ -73,6 +73,7 @@ docker compose --env-file .env.docker.host-sql -f compose.host-sql.yml up -d --b
 - 两个 GHCR 名称的候选镜像在本机构建成功，来源 / revision Labels 正确；镜像环境未包含运行时 SQL / JWT 凭据。
 - Compose 合并配置保留原 host SQL 目标和现有附件绑定，缺少版本时正确拒绝。
 - 本轮没有修改业务源码或数据库，也没有重新运行整套业务测试。
-- 尚未提交、推送或合并本轮 Workflow，没有执行真实 GHCR 登录 / 上传 / 拉取；带 ghcr.io 名称的本地镜像本身不代表已发布。首次上传及本机拉取运行需在 main 发布成功后验收。
+- 首次实际发布已完成：PR #7 合并后的 main `14abc12f64b1f92160f9122cd1b2e559622a7c36` 在 [Actions run 40207526290](https://github.com/shunbin2310/HelpDesk-System/actions/runs/40207526290) 的四个 Job 均成功。本机从 GHCR 拉取两个镜像，确认标签 / digest、容器健康、登录和工单查询、3 个现有附件下载哈希及记录数量；2 个旧消息附件仍隐藏。
+- 新增 CD 会在两个推送都成功后，从 Registry 读取 digest 并输出到 Summary，传给 Ubuntu 固定部署入口。该 CD 的服务器现场验收尚未完成。
 
 参考：[GitHub Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)、[发布 Docker 镜像](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images#publishing-images-to-github-packages)。

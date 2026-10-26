@@ -2,3 +2,5 @@
 /src/**/*.cs text eol=crlf
 /tests/**/*.cs text eol=crlf
 /.editorconfig text eol=lf
+/scripts/deploy/**/*.sh text eol=lf
+/scripts/deploy/*.sudoers text eol=lf

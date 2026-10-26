@@ -57,6 +57,9 @@ jobs:
           dotnet restore HelpDesk.slnx
           dotnet tool restore
 
+      - name: Test deployment failure and permission handling offline
+        run: sudo /usr/bin/python3 -m unittest discover -s scripts/deploy/tests -v
+
       - name: Build backend
         run: dotnet build HelpDesk.slnx --configuration Release --no-restore
 
@@ -163,6 +166,26 @@ jobs:
       - name: Build Web image
         run: docker build --tag helpdesk-web:ci src/HelpDesk.Web
 
+      - name: Verify Web startup with Ubuntu container permissions
+        env:
+          API_IMAGE: helpdesk-api:ci
+          WEB_IMAGE: helpdesk-web:ci
+          HELPDESK_SQL_PASSWORD: PublicComposeValidationOnly
+          HELPDESK_JWT_KEY: PublicComposeValidationOnlyNotUsedForAuthentication
+        run: |
+          set -euo pipefail
+          compose() { docker compose -p helpdesk-ci-runtime -f compose.ubuntu.yml "$@"; }
+          trap 'compose down --volumes' EXIT
+          compose run --rm --no-deps -T --entrypoint /bin/sh web -ec '
+            printf "127.0.0.1 api\n" >> /etc/hosts
+            /docker-entrypoint.sh nginx -g "daemon on;"
+            for attempt in 1 2 3 4 5; do
+              if wget --quiet --output-document=/dev/null http://127.0.0.1:8080/health; then exit 0; fi
+              sleep 1
+            done
+            exit 1
+          '
+
   publish:
     name: Publish GHCR images
     needs: images
@@ -172,6 +195,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      api_digest: ${{ steps.digests.outputs.api_digest }}
+      web_digest: ${{ steps.digests.outputs.web_digest }}
     env:
       API_IMAGE: ghcr.io/shunbin2310/helpdesk-api:${{ github.sha }}
       WEB_IMAGE: ghcr.io/shunbin2310/helpdesk-web:${{ github.sha }}
@@ -204,16 +230,92 @@ jobs:
       - name: Push Web image
         run: docker push "$WEB_IMAGE"
 
+      - name: Read published registry digests
+        id: digests
+        run: |
+          set -euo pipefail
+          api_digest=$(docker buildx imagetools inspect "$API_IMAGE" --format '{{json .Manifest}}' | jq -er '.digest')
+          web_digest=$(docker buildx imagetools inspect "$WEB_IMAGE" --format '{{json .Manifest}}' | jq -er '.digest')
+          [[ "$api_digest" =~ ^sha256:[0-9a-f]{64}$ && "$web_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'api_digest=%s\nweb_digest=%s\n' "$api_digest" "$web_digest" >> "$GITHUB_OUTPUT"
+
       - name: Record published version
         run: |
           {
             echo '## Published GHCR images'
             printf -- '- API: %s\n' "$API_IMAGE"
             printf -- '- Web: %s\n' "$WEB_IMAGE"
+            printf -- '- API digest: %s\n' "$API_DIGEST"
+            printf -- '- Web digest: %s\n' "$WEB_DIGEST"
             printf -- '\nSource commit: %s\n' "$GITHUB_SHA"
             echo 'Use this version only after both pushes have succeeded.'
           } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          API_DIGEST: ${{ steps.digests.outputs.api_digest }}
+          WEB_DIGEST: ${{ steps.digests.outputs.web_digest }}
 
       - name: Sign out of GHCR
         if: always()
         run: docker logout ghcr.io
+
+  deploy:
+    name: Automatically update Ubuntu
+    needs: publish
+    if: github.repository == 'shunbin2310/HelpDesk-System' && github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DOCKER_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SERVER_TAILSCALE_IP: ${{ vars.SERVER_TAILSCALE_IP }}
+      API_DIGEST: ${{ needs.publish.outputs.api_digest }}
+      WEB_DIGEST: ${{ needs.publish.outputs.web_digest }}
+    steps:
+      - name: Refuse stale commits and missing configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" == "$GITHUB_SHA" ]]
+          [[ "$SERVER_TAILSCALE_IP" =~ ^100\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$API_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$WEB_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ -n "$TS_OAUTH_CLIENT_ID" && -n "$TS_AUDIENCE" && -n "$DEPLOY_SSH_PRIVATE_KEY" && -n "$DEPLOY_SSH_KNOWN_HOSTS" ]]
+
+      - name: Connect to the server's Tailscale network
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:helpdesk-deploy
+          version: '1.102.5'
+          use-cache: 'false'
+
+      - name: Deploy exact digests through pinned SSH
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" == "$GITHUB_SHA" ]]
+          umask 077
+          SSH_DIR=$(mktemp -d "$RUNNER_TEMP/helpdesk-ssh.XXXXXX")
+          trap 'rm -f -- "$SSH_DIR/key" "$SSH_DIR/known_hosts"; rmdir -- "$SSH_DIR"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" | tr -d '\r' > "$SSH_DIR/key"
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" | tr -d '\r' > "$SSH_DIR/known_hosts"
+          unset DEPLOY_SSH_PRIVATE_KEY DEPLOY_SSH_KNOWN_HOSTS
+          ssh-keygen -y -P '' -f "$SSH_DIR/key" >/dev/null 2>&1
+          ssh-keygen -F "$SERVER_TAILSCALE_IP" -f "$SSH_DIR/known_hosts" >/dev/null
+          ssh -F /dev/null -T -i "$SSH_DIR/key" \
+            -o IdentitiesOnly=yes -o IdentityAgent=none \
+            -o PreferredAuthentications=publickey -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$SSH_DIR/known_hosts" \
+            -o GlobalKnownHostsFile=/dev/null -o UpdateHostKeys=no \
+            -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+            "helpdesk_deploy@$SERVER_TAILSCALE_IP" \
+            "sudo -n /usr/local/sbin/helpdesk-auto-deploy $GITHUB_SHA $API_DIGEST $WEB_DIGEST"
