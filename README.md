@@ -257,7 +257,7 @@ SQL Server 测试使用事务回滚或针对性清理移除自己创建的记录
 
 [HelpDesk CI](.github/workflows/ci.yml) 在 Push / Pull Request / 手动触发时检查后端、SQL 集成测试、Migration、前端，并在检查通过后构建两个 Docker 镜像。SQL 使用 Runner 内的临时容器，不连接本机数据库；缺少测试结果或出现 Skipped 会失败。测试 TRX 保存 7 天。原仓库 main Push 通过后发布两个 GHCR Commit SHA 版本镜像，PR 和手动运行只验证。
 
-初版 CI 已通过本地 Linux 等效验证和 PR #6 的远端运行。GHCR 发布配置已增加，本轮合并后仍需验证首次上传和本机拉取；服务器部署留在后续阶段。详情见[CI 说明](docs/ci.md)和[GHCR 发布与本机验证](docs/ghcr.md)。
+初版 CI 和 PR #6 的远端运行通过；PR #7 合并后的 main `14abc12` 已完成 GHCR 发布 / 本机拉取及 Ubuntu 首次手动部署验收。Ubuntu CD 依赖发布成功及 DOCKER_DEPLOY_ENABLED=true，专用 OIDC / SSH 凭据已准备，GitHub Runner 的真实自动部署仍待 PR 检查及 main 首次运行验收。详情见[CI 说明](docs/ci.md)、[GHCR 说明](docs/ghcr.md)及[Ubuntu 部署说明](docs/ubuntu-deployment.md)。
 
 ## 构建
 
@@ -304,6 +304,6 @@ Prettier 仅为开发依赖，不改变应用运行逻辑。`.gitattributes` 固
 - [需求说明](docs/requirements.md)
 - [数据库设计草案](docs/database-design.md)
 
-当前核心工单、附件、Delegation、本机 Docker 和 CI 已完成，阶段 8 已由用户验收。新增 GHCR 发布配置，首次上传及本机拉取需本轮合并 main 后验证；Workflow Template 编辑器按用户保持简单的方向继续暂缓。
+当前核心工单、附件、Delegation、本机 Docker、CI 及 GHCR 发布 / 本机拉取已完成。与 Purchasing 共用 Ubuntu，新建独立 HelpDeskDb；首次手动部署 `14abc12` 已通过容器和 Web → API 健康检查。首个管理员、浏览器业务验收及 GitHub 自动部署尚待完成。Workflow Template 编辑器继续暂缓。
 
 JWT 验证遵循 [ASP.NET Core Bearer 文档](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0)，前端权限导航使用 [Vue Router guards](https://router.vuejs.org/guide/advanced/navigation-guards)。界面导航只提供交互限制，实际权限由 API Bearer 验证和角色授权执行。

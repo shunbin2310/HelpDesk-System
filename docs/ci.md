@@ -1,6 +1,6 @@
 # GitHub Actions CI
 
-配置文件为 `.github/workflows/ci.yml`。每次 Push、Pull Request 和手动 Run workflow 都执行验证；其他分支 / PR 的新运行取消旧运行，main 正在执行的运行不自动取消。原仓库 main Push 全部检查通过后，新增 GHCR 发布 Job；本流程不执行服务器部署。镜像及本机拉取方式见[GHCR 说明](ghcr.md)。
+配置文件为 `.github/workflows/ci.yml`。每次 Push、Pull Request 和手动 Run workflow 都执行验证；其他分支 / PR 的新运行取消旧运行，main 正在执行的运行不自动取消。原仓库 main Push 全部检查通过后发布 GHCR 镜像；服务器准备完成且 DOCKER_DEPLOY_ENABLED=true 时继续部署 Ubuntu。镜像及本机拉取方式见[GHCR 说明](ghcr.md)，首次服务器设置见[Ubuntu 部署说明](ubuntu-deployment.md)。
 
 ## 检查内容
 
@@ -10,6 +10,11 @@
 | Frontend checks and build | Node.js 24、npm ci、Prettier 检查、vue-tsc 类型检查及 Vite 生产构建 |
 | Build Docker images | 等后端和前端都通过，再使用已有 Dockerfile 构建 API / Web 镜像 |
 | Publish GHCR images | 仅原仓库 main Push，等待 images 成功后发布两个 Commit SHA 版本的 GHCR 镜像；PR / 手动运行跳过 |
+| Automatically update Ubuntu | 依赖 publish 成功及部署开关 true，经 Tailscale OIDC / 固定 SSH 入口部署两个 exact digest；PR / 手动运行跳过 |
+
+Backend Job 还在隔离 Runner 中执行部署脚本测试，使用假 Docker / HTTP 与临时文件，验证失败、权限和并发处理，不连接 Ubuntu。
+
+Build Docker images 还使用 compose.ubuntu.yml 的真实权限运行 Web 健康检查；API 不启动、不连接 SQL、不发布主机端口，测试项目和临时卷在退出时清理。
 
 SQL Server 2022 使用固定镜像 digest，在 GitHub-hosted Ubuntu 24.04 Runner 的临时容器内运行。健康检查通过后才执行步骤；先在 HelpDeskCi 应用 Migration，因为部分现有数据库约束及账号存储测试需要已初始化的库。其余流程和账号测试继续创建自己的随机测试库并清理。
 
@@ -23,7 +28,7 @@ SQL Server 2022 使用固定镜像 digest，在 GitHub-hosted Ubuntu 24.04 Runne
 
 后端步骤失败时输出临时 SQL Server 日志；测试报告尽可能作为 `backend-test-results` Artifact 保存 7 天。任何前置检查失败，Docker 构建 Job 就不执行。
 
-原三个检查 Job 的权限只有 `contents: read`，Checkout 不保留 Git 凭据。新增的 main Push 发布 Job 单独使用 `packages: write` 和内置 `GITHUB_TOKEN` 登录 GHCR。官方 Actions 固定到已核对的 commit SHA；没有 SSH、服务器部署或调用本机 Compose 的步骤。PR 使用普通 `pull_request`，不使用 `pull_request_target`。
+原三个检查 Job 的权限只有 `contents: read`，Checkout 不保留 Git 凭据。main Push 发布 Job 单独使用 `packages: write` 和内置 `GITHUB_TOKEN` 登录 GHCR；部署 Job 单独使用 `id-token: write` 和 HelpDesk 专用 SSH 凭据。检查 Job 不读取部署 Secrets，也不调用本机 Compose。Actions 固定到已核对的 commit SHA。PR 使用普通 `pull_request`，不使用 `pull_request_target`。
 
 ## 提交后查看
 
@@ -41,6 +46,6 @@ SQL Server 2022 使用固定镜像 digest，在 GitHub-hosted Ubuntu 24.04 Runne
 - 使用真实 TRX 验证报告检查通过，并确认它会拒绝 skipped、failed、empty、missing 和 missing-counters 五类报告。
 - Linux TRX 结果保留在本机 Git 忽略的 `artifacts/ci-validation/` 下。临时验证容器、网络和源码副本在完成后清理。
 
-以上是初版 CI 的本地 Linux 等效验证。其后用户提供 PR #6 的 GitHub 截图，确认 Push 和 Pull Request 的三项检查均成功，并已合并到 main。新增 GHCR 发布功能仍需在本轮 Workflow 合并后验证首次远端上传与本机拉取，不能将本地构建当作已发布。
+以上是初版 CI 的本地 Linux 等效验证。其后 PR #6 的三项检查通过；PR #7 合并后 main `14abc12` 的四个 Job 全部成功，实际 GHCR 发布与本机拉取运行已验收。新增加的 Ubuntu CD 尚需服务器安装、GitHub / Tailscale 配置及第一次远端部署验收。
 
 参考：[actions/setup-dotnet](https://github.com/actions/setup-dotnet)、[actions/setup-node](https://github.com/actions/setup-node)、[actionlint 使用说明](https://github.com/rhysd/actionlint/blob/main/docs/usage.md)。

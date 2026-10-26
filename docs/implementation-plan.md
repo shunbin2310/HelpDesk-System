@@ -302,7 +302,7 @@ Employee Close → Closed
 - [x] 编写前后端独立的多阶段 Dockerfile 和本机 Docker Compose 配置，沿用现有 Solution 分层；服务器编排在选定目标后再配置。
 - [x] 建立 GitHub Actions CI Workflow：后端构建与测试、前端格式 / 类型检查与构建、Migration 模型检查通过后，再验证两个 Docker 镜像构建；本地 Linux 及 PR #6 的远端检查通过。
 - [x] 确认 GHCR，增加仅原仓库 main Push 检查通过才发布两个 Commit SHA 镜像的步骤。
-- [ ] 验证首次 GHCR 上传成功，以及本机从 Registry 拉取运行同一 main SHA 的两个镜像。
+- [x] 验证首次 GHCR 上传成功，以及本机从 Registry 拉取运行同一 main SHA 的两个镜像。
 - [ ] 确认镜像仓库、部署触发方式、反向代理和目标环境，并实现对应 CD 步骤。
 - [ ] 配置生产前端与 API 路由；开发 Vite 代理不能直接作为生产部署方案。
 - [ ] 配置生产凭据、首个管理员、附件持久化、日志及后台代理任务运行方式。
@@ -325,7 +325,7 @@ GHCR 配置（2026-10-25）：原三个检查名和 PR 只读权限保持不变�
 4. 用中文交付：修改文件、关键变化、可测试步骤、验证结果和剩余限制。
 5. 完成验收后更新本计划的状态及相关文档，不提前勾选未完成项目。
 
-当前已完成账号、固定 Workflow、Ticket、提交附件、Delegation、本机 Docker，阶段 8 和远端 CI 已验收；本轮已增加 GHCR 发布配置，下一步验证 main 的首次上传及本机拉取，再决定服务器部署。阶段 6 模板编辑器继续暂缓。
+当前已完成账号、固定 Workflow、Ticket、提交附件、Delegation、本机 Docker、远端 CI 与 GHCR 发布 / 本机拉取。2026-10-26 与 Purchasing 共用 Ubuntu，新建独立 HelpDeskDb 和受限应用登录，不搬迁 Windows 数据。固定脚本首次手动部署 `14abc12` 成功，两个容器 Healthy，Web → API、首个管理员登录、默认 Workflow 查询及专用密钥 LAN SSH / sudo 权限验证通过。用户已创建 HelpDesk OIDC、四个 GitHub Secrets 和两个 Variables，部署开关为 false；14 项隔离部署测试已通过。下一步提交当前分支、通过 PR 检查并准备第一次 main 自动部署；Runner OIDC / Tailscale / SSH 连接及服务器业务 / 持久化验收尚未完成，见[Ubuntu 部署说明](ubuntu-deployment.md)。阶段 6 模板编辑器继续暂缓。
 
 ## 14. Project1 功能参考清单
 
