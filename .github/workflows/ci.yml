@@ -57,8 +57,10 @@ jobs:
           dotnet restore HelpDesk.slnx
           dotnet tool restore
 
-      - name: Test deployment failure and permission handling offline
-        run: sudo /usr/bin/python3 -m unittest discover -s scripts/deploy/tests -v
+      - name: Test deployment and boot recovery offline
+        run: |
+          sudo /usr/bin/python3 -m unittest discover -s scripts/deploy/tests -v
+          systemd-analyze verify --man=no scripts/deploy/helpdesk-web-boot.service
 
       - name: Build backend
         run: dotnet build HelpDesk.slnx --configuration Release --no-restore

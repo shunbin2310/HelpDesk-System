@@ -2,7 +2,7 @@
 
 已确认：使用现有 Ubuntu，SQL Server 中新建独立 HelpDeskDb，不搬迁 Windows 的账号、工单或附件。沿用现有 Docker / SQL / Tailscale；不重装、不重启共享 SQL、不修改 Purchasing 的 Compose、Nginx 或部署用户。
 
-本轮先准备可审阅的部署文件及离线测试。真正的服务器安装、GitHub / Tailscale 设置和首次部署必须按下面步骤完成，不能把本地测试当作服务器已上线。
+以下保留首次安装和日常恢复步骤；当前已验证的部署及未完成的验收见文末。不要在已有安装上重复创建数据库、账号或覆盖私密配置。
 
 ## 1. 先检查现有服务器
 
@@ -239,13 +239,57 @@ needs-attention 在成功时不存在；失败日志可能包含业务信息，�
 
 成功记录为 release.env，上一次成功记录为 previous-release.env；这不是数据库或附件备份。服务器上的 root-owned Compose / 配置 / 脚本不会随着镜像自动更新，修改这些文件须由管理员审阅后安装。
 
+## 7. 开机时 LAN 地址尚未出现
+
+2026-10-27 现场确认：Docker 启动时 `192.168.1.125` 尚不可用，Web 报 `cannot assign requested address`。后续 `docker start` 虽启动了进程，仍出现 Configured 有 `8085`、Actual 为空；只重建 Web 后端口映射和 `/api/health` 恢复。Docker 已有 `After=network-online.target`，不能仅添加同样的顺序解决。
+
+`scripts/deploy/helpdesk-web-boot.service` 是 HelpDesk 独立的一次性开机补偿：等待 `.env` 中的绑定 IPv4 实际出现，最多 180 秒；取得与 CI/CD 共用的部署锁后，再检查失败标记。如果主机端口的 `/health` 已响应，则不改容器；否则按 `release.env` 已记录的镜像重建 Web，并检查主机端口。它不拉镜像、不重建 API、不执行数据库更新，也不修改 Docker / SQL / Purchasing 的启动配置。
+
+该 unit 不持续监控容器、不提供 systemd Restart / ExecStop；正常容器重启仍由既有 Docker restart policy 负责。它只在开机或管理员明确 start 时执行，不绕过 `needs-attention`，不在失败时反复重建。
+
+先在 Windows 仓库根目录上传新文件（使用已核对的管理员 SSH）：
+
+```powershell
+scp -o StrictHostKeyChecking=yes .\scripts\deploy\helpdesk-web-boot.service shunbin@192.168.1.125:helpdesk-setup/
+if ($LASTEXITCODE -ne 0) { throw '上传失败，先检查。' }
+```
+
+再由 Ubuntu 管理员首次安装；已有同名 unit 时停止，先审阅，不覆盖：
+
+```bash
+(
+set -e
+sudo -v
+test "$(hostname)" = homelab-server
+unit=/etc/systemd/system/helpdesk-web-boot.service
+if sudo test -e "$unit" || sudo test -L "$unit"; then
+    echo 'Unit already exists. Stop and inspect.'
+    exit 1
+fi
+sudo systemd-analyze verify --man=no ~/helpdesk-setup/helpdesk-web-boot.service
+sudo install -m 0644 -o root -g root ~/helpdesk-setup/helpdesk-web-boot.service "$unit"
+sudo systemctl daemon-reload
+sudo systemctl enable --now helpdesk-web-boot.service
+sudo systemctl show helpdesk-web-boot.service -p UnitFileState -p Result -p ExecMainStatus
+sudo journalctl -u helpdesk-web-boot.service -n 20 --no-pager
+curl --noproxy '*' -fsS http://192.168.1.125:8085/api/health
+)
+```
+
+当前网站健康时应记录 `HelpDesk Web already responds; no container changes.`；oneshot 成功后显示 inactive/dead 属正常，检查 Result=success、ExecMainStatus=0、UnitFileState=enabled。不要为这项安装重启共享 Docker 或 SQL。
+
+真实重启验收需另选可中断 Purchasing 的维护时间，由管理员明确执行。重启后检查 unit 日志、两个容器 Healthy、`docker port helpdesk-auto-web-1`、Web → API、登录及原工单 / 附件。未做实际重启前，不能把安装成功当作开机恢复已验收。
+
+如果 180 秒后仍无绑定 IP，unit 会超时；先恢复该地址，再运行 `sudo systemctl start helpdesk-web-boot.service`。若 DHCP 改了服务器地址，应先确认新的固定地址及入口配置，不自动改为 `0.0.0.0`。停用这项补偿可执行 `sudo systemctl disable helpdesk-web-boot.service`，不会停止现有容器。
+
 ## 验证状态
 
 - 2026-10-25 main `14abc12` 的测试、镜像构建及 GHCR 发布已成功；本机实际拉取两个镜像，并验证登录、工单、3 个附件下载哈希和数据库记录数量。
 - 本次新增 CD 的 actionlint、14 项隔离 Linux 成功 / 失败 / 并发 / 权限测试、正式 Compose 配置断言和真实 Web 镜像启动检查通过；不使用服务器凭据，不连接共享数据库。Web 仅保留 Nginx 初始化缓存和切换 worker 用户需要的 CHOWN / SETGID / SETUID，API 移除全部 capabilities。
 - 2026-10-26 用户在 homelab-server / 192.168.1.125 完成安装：文件 root 权限及专用 sudo 入口检查通过；HelpDeskDb 和 helpdesk_app 已新建，专用账号实际登录成功，db_owner=1、sysadmin=0。两个 GHCR digest 拉取成功，固定脚本首次手动部署 `14abc12` 成功，API / Web Healthy，服务器自身的 Web → API 检查通过；Purchasing 先前检查的 RestartCount 为 0。
-- 首个管理员已创建，真实 HTTP 登录及默认 Workflow 查询通过。HelpDesk 专用密钥的 LAN SSH 登录、部署用户身份、限定 sudo 权限、固定入口的参数拒绝和网站健康检查均已验证。Tailscale 主机公钥已通过严格校验的 LAN SSH 读取；尚未验证 GitHub Runner 的 Tailscale 连接。
-- 用户已配置 HelpDesk 的 Tailscale 网络规则，并创建专用 OIDC credential（auth_keys 写入、tag:helpdesk-deploy、GitHub issuer、main immutable Subject、push / workflow_ref 条件）。GitHub 截图已确认四个 Repository secrets 名称及两个 Variables 的配置，DOCKER_DEPLOY_ENABLED=false；Secrets 的隐藏值和 GitHub Runner 实际认证仍需首次运行验证。
-- 下一步提交 codex/ubuntu-deploy 并通过 PR 检查，准备启用开关后合并 main，验收第一次远端 CD。服务器业务 / 持久化验收仍待完成，不能把首次手动部署或 Secrets 名称正确当作 CD 已验收。
+- 首个管理员已创建，真实 HTTP 登录及默认 Workflow 查询通过。HelpDesk 专用密钥的 LAN SSH 登录、部署用户身份、限定 sudo 权限、固定入口的参数拒绝和网站健康检查均已验证。
+- PR #8 合并后 main `4236b6891562d7e1403fe94a1b0cf7d6888b8879` 的[运行 40355611450](https://github.com/shunbin2310/HelpDesk-System/actions/runs/40355611450) 五个 Job 全部成功，包括 Publish GHCR images 和 Automatically update Ubuntu。2026-10-27 已通过 GitHub API 核对；用户提供的服务器 release.env 与该版本和两个发布 digest 一致，首次 Runner OIDC / Tailscale / SSH 自动部署已跑通。
+- 2026-10-27 修复现场 Web 端口丢失后，API / Web Healthy、`192.168.1.125:8085` 映射及 `/api/health` 通过；另验证管理员登录、身份、默认 Workflow、用户 / Ticket / Delegation 列表接口成功。完整四角色业务和附件持久化验收仍待完成。
+- 开机补偿 unit 的 systemd 语法校验、9 项恢复测试及既有 14 项部署测试全部通过；actionlint 通过。测试在本机一次性 Linux 容器中运行，使用假 IP / Docker / HTTP，不连接服务器。2026-10-27 用户已在 Ubuntu 安装并启用 unit，首次执行记录 `HelpDesk Web already responds; no container changes.`，Result=success、ExecMainStatus=0、UnitFileState=enabled。随后经 SSH 核对已安装文件 SHA256 与仓库一致，Web → API 健康检查通过。真实重启及启动故障恢复验收仍待完成，不能把健康站点上的首次执行当作开机恢复已通过。
 
-参考：[Tailscale GitHub Action](https://tailscale.com/docs/integrations/github/github-action)、[OIDC federation](https://tailscale.com/docs/features/workload-identity-federation)、[GitHub OIDC Subject](https://docs.github.com/en/actions/reference/security/oidc)、[Docker Compose up](https://docs.docker.com/reference/cli/docker/compose/up/)、[Registry manifest inspection](https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/)。
+参考：[Tailscale GitHub Action](https://tailscale.com/docs/integrations/github/github-action)、[OIDC federation](https://tailscale.com/docs/features/workload-identity-federation)、[GitHub OIDC Subject](https://docs.github.com/en/actions/reference/security/oidc)、[Docker Compose up](https://docs.docker.com/reference/cli/docker/compose/up/)、[Registry manifest inspection](https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/)、[systemd service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)。
