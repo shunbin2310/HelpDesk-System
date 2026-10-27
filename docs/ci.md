@@ -12,7 +12,7 @@
 | Publish GHCR images | 仅原仓库 main Push，等待 images 成功后发布两个 Commit SHA 版本的 GHCR 镜像；PR / 手动运行跳过 |
 | Automatically update Ubuntu | 依赖 publish 成功及部署开关 true，经 Tailscale OIDC / 固定 SSH 入口部署两个 exact digest；PR / 手动运行跳过 |
 
-Backend Job 还在隔离 Runner 中执行部署脚本测试，使用假 Docker / HTTP 与临时文件，验证失败、权限和并发处理，不连接 Ubuntu。
+Backend Job 还在隔离 Runner 中执行部署和开机补偿测试，使用假 IP / Docker / HTTP 与临时文件，验证地址延迟、失败标记、权限及部署锁，并使用 systemd-analyze 校验 unit 语法，不连接 Ubuntu。
 
 Build Docker images 还使用 compose.ubuntu.yml 的真实权限运行 Web 健康检查；API 不启动、不连接 SQL、不发布主机端口，测试项目和临时卷在退出时清理。
 
@@ -46,6 +46,6 @@ SQL Server 2022 使用固定镜像 digest，在 GitHub-hosted Ubuntu 24.04 Runne
 - 使用真实 TRX 验证报告检查通过，并确认它会拒绝 skipped、failed、empty、missing 和 missing-counters 五类报告。
 - Linux TRX 结果保留在本机 Git 忽略的 `artifacts/ci-validation/` 下。临时验证容器、网络和源码副本在完成后清理。
 
-以上是初版 CI 的本地 Linux 等效验证。其后 PR #6 的三项检查通过；PR #7 合并后 main `14abc12` 的四个 Job 全部成功，实际 GHCR 发布与本机拉取运行已验收。新增加的 Ubuntu CD 尚需服务器安装、GitHub / Tailscale 配置及第一次远端部署验收。
+以上是初版 CI 的本地 Linux 等效验证。其后 PR #6 的三项检查通过；PR #7 合并后 main `14abc12` 的四个 Job 全部成功，实际 GHCR 发布与本机拉取运行已验收。PR #8 合并后 main `4236b68` 的[运行 40355611450](https://github.com/shunbin2310/HelpDesk-System/actions/runs/40355611450) 五个 Job 全部成功，首次 Ubuntu 自动部署已验证。2026-10-27 已恢复 Web 端口映射并确认登录及列表接口；完整业务、持久化及开机恢复验收仍待完成。
 
 参考：[actions/setup-dotnet](https://github.com/actions/setup-dotnet)、[actions/setup-node](https://github.com/actions/setup-node)、[actionlint 使用说明](https://github.com/rhysd/actionlint/blob/main/docs/usage.md)。

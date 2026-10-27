@@ -123,7 +123,7 @@ Application 契约为 `Tickets/ITicketService.cs`，Infrastructure 的 `TicketSe
 
 创建工单的数据库写入在同一事务中完成，失败会回滚并清理未被记录引用的文件。上传限制为每文件 10 MiB、整个请求 51 MiB；反向代理部署时也需匹配请求限制。收到失败后保留表单供检查，遇到网络超时先查看列表确认是否已创建，避免重复提交。
 
-默认文件目录为当前服务身份的 LocalApplicationData/HelpDesk-System/Attachments；文件以随机 key.blob 保存，不放 wwwroot、不开放静态 URL，数据库只存元数据。生产环境通过 `Attachments__RootPath` 指定 **私有、不可执行、API 身份可读写的持久目录**，禁止指向静态站点目录；容器需挂载持久卷，同时备份数据库和附件。多 API 实例必须共享同一私有存储。本机 Docker 已配置独立持久卷，服务器部署仍待实施。
+默认文件目录为当前服务身份的 LocalApplicationData/HelpDesk-System/Attachments；文件以随机 key.blob 保存，不放 wwwroot、不开放静态 URL，数据库只存元数据。生产环境通过 `Attachments__RootPath` 指定 **私有、不可执行、API 身份可读写的持久目录**，禁止指向静态站点目录；容器需挂载持久卷，同时备份数据库和附件。多 API 实例必须共享同一私有存储。本机 Docker 与 Ubuntu 已配置独立持久卷；Ubuntu 附件持久化验收仍待完成。
 
 API 启动及之后每小时核对一次超过 24 小时的文件，只删除数据库没有引用的孤立文件（包含对旧消息附件引用的保护）；数据库不可用时保留文件等待重试。正常失败立即清理，异常中断可能暂留文件。
 
@@ -257,7 +257,7 @@ SQL Server 测试使用事务回滚或针对性清理移除自己创建的记录
 
 [HelpDesk CI](.github/workflows/ci.yml) 在 Push / Pull Request / 手动触发时检查后端、SQL 集成测试、Migration、前端，并在检查通过后构建两个 Docker 镜像。SQL 使用 Runner 内的临时容器，不连接本机数据库；缺少测试结果或出现 Skipped 会失败。测试 TRX 保存 7 天。原仓库 main Push 通过后发布两个 GHCR Commit SHA 版本镜像，PR 和手动运行只验证。
 
-初版 CI 和 PR #6 的远端运行通过；PR #7 合并后的 main `14abc12` 已完成 GHCR 发布 / 本机拉取及 Ubuntu 首次手动部署验收。Ubuntu CD 依赖发布成功及 DOCKER_DEPLOY_ENABLED=true，专用 OIDC / SSH 凭据已准备，GitHub Runner 的真实自动部署仍待 PR 检查及 main 首次运行验收。详情见[CI 说明](docs/ci.md)、[GHCR 说明](docs/ghcr.md)及[Ubuntu 部署说明](docs/ubuntu-deployment.md)。
+初版 CI 和 PR #6 的远端运行通过；PR #7 合并后的 main `14abc12` 已完成 GHCR 发布 / 本机拉取及 Ubuntu 首次手动部署验收。PR #8 合并后的 main `4236b68` 五个 Job 全部成功，GitHub Runner 经 OIDC / Tailscale / SSH 自动更新 Ubuntu 已验证。2026-10-27 已恢复因绑定 IP 尚未出现而缺失的 Web 端口映射；开机补偿 unit 已安装、启用，首次执行正确跳过健康站点，真实重启验收仍待完成。详情见[CI 说明](docs/ci.md)、[GHCR 说明](docs/ghcr.md)及[Ubuntu 部署说明](docs/ubuntu-deployment.md)。
 
 ## 构建
 
@@ -275,7 +275,7 @@ npm.cmd ci
 npm.cmd run build
 ```
 
-前端 build 会先执行 vue-tsc 类型检查，再产出 dist。可以单独运行 `npm.cmd run type-check`。`npm.cmd run preview` 只预览前端构建产物，不包含开发代理；本机 Docker 使用 Nginx 提供静态文件和同源 `/api/` 转发，服务器部署仍待实施。
+前端 build 会先执行 vue-tsc 类型检查，再产出 dist。可以单独运行 `npm.cmd run type-check`。`npm.cmd run preview` 只预览前端构建产物，不包含开发代理；本机 Docker 和 Ubuntu 使用 Nginx 提供静态文件和同源 `/api/` 转发。
 
 工具文档：[Vue TypeScript](https://vuejs.org/guide/typescript/overview.html)、[Vite](https://vite.dev/guide/)。
 
@@ -304,6 +304,6 @@ Prettier 仅为开发依赖，不改变应用运行逻辑。`.gitattributes` 固
 - [需求说明](docs/requirements.md)
 - [数据库设计草案](docs/database-design.md)
 
-当前核心工单、附件、Delegation、本机 Docker、CI 及 GHCR 发布 / 本机拉取已完成。与 Purchasing 共用 Ubuntu，新建独立 HelpDeskDb；首次手动部署 `14abc12` 已通过容器和 Web → API 健康检查。首个管理员、浏览器业务验收及 GitHub 自动部署尚待完成。Workflow Template 编辑器继续暂缓。
+当前核心工单、附件、Delegation、本机 Docker、CI、GHCR 发布及 Ubuntu 自动部署已完成。与 Purchasing 共用 Ubuntu，使用独立 HelpDeskDb；首个管理员已创建，登录和业务列表接口验证通过。Ubuntu 完整四角色业务、附件持久化及开机恢复验收仍待完成；开机补偿的安装步骤见部署说明第 7 节。Workflow Template 编辑器继续暂缓。
 
 JWT 验证遵循 [ASP.NET Core Bearer 文档](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0)，前端权限导航使用 [Vue Router guards](https://router.vuejs.org/guide/advanced/navigation-guards)。界面导航只提供交互限制，实际权限由 API Bearer 验证和角色授权执行。

@@ -27,7 +27,7 @@ GHCR 新包默认 private，本实现不修改包可见性。来源仓库 Label 
 2. 合并到 main；main Push 会再次验证，并在通过后发布两个镜像。
 3. 在 Actions → HelpDesk CI → Publish GHCR images 查看日志和 Summary，也可在账号 Packages 页面查看 helpdesk-api 和 helpdesk-web。
 
-发布本身不更新本机 Docker。后续新增 Ubuntu 部署 Job，只有服务器准备完成、DOCKER_DEPLOY_ENABLED=true 时才执行；首次安装见[Ubuntu 部署说明](ubuntu-deployment.md)。
+发布本身不更新本机 Docker。Ubuntu 部署 Job 只有 DOCKER_DEPLOY_ENABLED=true 时才执行；首次安装及开机恢复见[Ubuntu 部署说明](ubuntu-deployment.md)。
 
 ## 本机拉取与运行
 
@@ -74,6 +74,6 @@ docker compose --env-file .env.docker.host-sql -f compose.host-sql.yml up -d --b
 - Compose 合并配置保留原 host SQL 目标和现有附件绑定，缺少版本时正确拒绝。
 - 本轮没有修改业务源码或数据库，也没有重新运行整套业务测试。
 - 首次实际发布已完成：PR #7 合并后的 main `14abc12f64b1f92160f9122cd1b2e559622a7c36` 在 [Actions run 40207526290](https://github.com/shunbin2310/HelpDesk-System/actions/runs/40207526290) 的四个 Job 均成功。本机从 GHCR 拉取两个镜像，确认标签 / digest、容器健康、登录和工单查询、3 个现有附件下载哈希及记录数量；2 个旧消息附件仍隐藏。
-- 新增 CD 会在两个推送都成功后，从 Registry 读取 digest 并输出到 Summary，传给 Ubuntu 固定部署入口。该 CD 的服务器现场验收尚未完成。
+- CD 在两个推送都成功后，从 Registry 读取 digest 并输出到 Summary，传给 Ubuntu 固定部署入口。PR #8 合并后 main `4236b68` 的[运行 40355611450](https://github.com/shunbin2310/HelpDesk-System/actions/runs/40355611450) 已成功执行发布和 Ubuntu 自动更新；服务器 release.env 与发布版本一致。完整业务、持久化及开机恢复验收仍待完成。
 
 参考：[GitHub Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)、[发布 Docker 镜像](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images#publishing-images-to-github-packages)。
