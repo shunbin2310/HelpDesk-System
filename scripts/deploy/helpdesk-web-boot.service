@@ -1,0 +1,33 @@
+[Unit]
+Description=Restore HelpDesk Web after its private bind address becomes available
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+ConditionPathExists=/opt/helpdesk-auto/release.env
+ConditionPathExists=!/opt/helpdesk-auto/needs-attention
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/helpdesk-auto/.env
+EnvironmentFile=/opt/helpdesk-auto/release.env
+TimeoutStartSec=480
+ExecStartPre=/usr/bin/timeout 180 /bin/bash -ec '\
+    until /usr/sbin/ip -4 -o address show | /usr/bin/grep -Fq -- " $${HELPDESK_BIND_IP}/"; do \
+        /usr/bin/sleep 2; \
+    done'
+# Use the deployment lock and recheck its failure marker before changing Web.
+ExecStart=/usr/bin/flock -w 180 /opt/helpdesk-auto/deploy.lock /bin/bash -ec '\
+    test ! -e /opt/helpdesk-auto/needs-attention; \
+    test ! -L /opt/helpdesk-auto/needs-attention; \
+    if /usr/bin/curl --noproxy "*" --fail --silent --max-time 5 --output /dev/null "http://$${HELPDESK_BIND_IP}:8085/health"; then \
+        echo "HelpDesk Web already responds; no container changes."; \
+        exit 0; \
+    fi; \
+    /usr/bin/docker compose --project-name helpdesk-auto --project-directory /opt/helpdesk-auto \
+        --env-file /opt/helpdesk-auto/.env --env-file /opt/helpdesk-auto/release.env \
+        -f /opt/helpdesk-auto/compose.yml \
+        up -d --no-deps --force-recreate --no-build --pull never --wait --wait-timeout 90 web; \
+    /usr/bin/curl --noproxy "*" --fail --silent --show-error --max-time 10 --output /dev/null "http://$${HELPDESK_BIND_IP}:8085/health"'
+
+[Install]
+WantedBy=multi-user.target
