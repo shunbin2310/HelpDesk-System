@@ -1,6 +1,6 @@
 # GitHub Actions CI
 
-配置文件为 `.github/workflows/ci.yml`。每次 Push、Pull Request 和手动 Run workflow 都执行验证；其他分支 / PR 的新运行取消旧运行，main 正在执行的运行不自动取消。原仓库 main Push 全部检查通过后发布 GHCR 镜像；服务器准备完成且 DOCKER_DEPLOY_ENABLED=true 时继续部署 Ubuntu。镜像及本机拉取方式见[GHCR 说明](ghcr.md)，首次服务器设置见[Ubuntu 部署说明](ubuntu-deployment.md)。
+配置文件为 `.github/workflows/ci.yml`。除 demo-links 外的 Push、Pull Request 和手动 Run workflow 执行验证；其他分支 / PR 的新运行取消旧运行，main 正在执行的运行不自动取消。demo-links 的自动跳转页更新由 GitHub Pages 单独发布，不触发应用镜像构建或部署。原仓库 main Push 全部检查通过后发布 GHCR 镜像；服务器准备完成且 DOCKER_DEPLOY_ENABLED=true 时继续部署 Ubuntu。镜像及本机拉取方式见[GHCR 说明](ghcr.md)，首次服务器设置见[Ubuntu 部署说明](ubuntu-deployment.md)。
 
 ## 检查内容
 
@@ -13,6 +13,8 @@
 | Automatically update Ubuntu | 依赖 publish 成功及部署开关 true，经 Tailscale OIDC / 固定 SSH 入口部署两个 exact digest；PR / 手动运行跳过 |
 
 Backend Job 还在隔离 Runner 中执行部署和开机补偿测试，使用假 IP / Docker / HTTP 与临时文件，验证地址延迟、失败标记、权限及部署锁，并使用 systemd-analyze 校验 unit 语法，不连接 Ubuntu。
+
+Quick Tunnel 脚本也在该 Job 使用本地 HTTP / 假进程与假 GitHub 响应验证，不访问真实 Cloudflare / GitHub，也不需要 Token；安装器在临时文件系统测试，不修改 Runner 的服务。
 
 Build Docker images 还使用 compose.ubuntu.yml 的真实权限运行 Web 健康检查；API 不启动、不连接 SQL、不发布主机端口，测试项目和临时卷在退出时清理。
 
