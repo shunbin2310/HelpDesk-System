@@ -5,3 +5,4 @@
 /scripts/deploy/**/*.sh text eol=lf
 /scripts/deploy/*.sudoers text eol=lf
 /scripts/deploy/*.service text eol=lf
+/scripts/homelab/** text eol=lf

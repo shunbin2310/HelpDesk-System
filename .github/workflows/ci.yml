@@ -2,6 +2,7 @@ name: HelpDesk CI
 
 on:
   push:
+    branches-ignore: [demo-links]
   pull_request:
   workflow_dispatch:
 
@@ -60,7 +61,9 @@ jobs:
       - name: Test deployment and boot recovery offline
         run: |
           sudo /usr/bin/python3 -m unittest discover -s scripts/deploy/tests -v
-          systemd-analyze verify --man=no scripts/deploy/helpdesk-web-boot.service
+          sudo /usr/bin/python3 -m unittest discover -s scripts/homelab/tests -v
+          systemd-analyze verify --man=no scripts/deploy/helpdesk-web-boot.service scripts/homelab/helpdesk-demo.service
+          bash -n scripts/homelab/install.sh
 
       - name: Build backend
         run: dotnet build HelpDesk.slnx --configuration Release --no-restore

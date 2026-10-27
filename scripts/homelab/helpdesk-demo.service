@@ -1,0 +1,32 @@
+[Unit]
+Description=HelpDesk Quick Tunnel and GitHub Pages redirect
+Wants=network-online.target helpdesk-web-boot.service
+After=network-online.target docker.service helpdesk-web-boot.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+DynamicUser=yes
+EnvironmentFile=/etc/helpdesk-demo/config
+Environment=PYTHONUNBUFFERED=1
+LoadCredential=github-token:/etc/helpdesk-demo/github-token
+ExecStart=/usr/bin/python3 -B /opt/helpdesk-demo/quick_tunnel.py
+Restart=always
+RestartSec=15
+# Let the supervisor terminate and reap cloudflared before systemd kills the group.
+KillMode=mixed
+TimeoutStopSec=45
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

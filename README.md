@@ -2,6 +2,12 @@
 
 公司内部 IT Helpdesk System。当前已完成 Vue 3 + TypeScript / .NET 10 分层骨架、账号管理、Workflow Engine，Ticket 核心闭环，以及阶段 5 提交附件与处理历史，以及 Delegation 自动交接与归还。
 
+## Live Demo
+
+[Open Live Demo](https://shunbin2310.github.io/HelpDesk-System/)
+
+演示仅在 Ubuntu 服务器和网站运行时可用；登录账号由项目维护者提供。首次使用需先完成 [Quick Tunnel 设置](docs/quick-tunnel-demo.md)。README 使用固定入口，服务器重启后自动更新跳转目标为最新 Quick Tunnel 地址；GitHub Pages 发布及缓存更新可能需要几分钟。
+
 ## 项目结构
 
 ```text
